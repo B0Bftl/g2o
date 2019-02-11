@@ -25,6 +25,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "linear_solver_eigen.h"
+#include "linear_solver_pcg_eigen.h"
 
 #include "g2o/core/block_solver.h"
 #include "g2o/core/solver.h"
@@ -47,7 +48,7 @@ namespace g2o {
     std::unique_ptr<BlockSolverBase> AllocateSolver()
     {
       std::cerr << "# Using EigenSparseCholesky poseDim " << p << " landMarkDim " << l << " blockordering " << blockorder << std::endl;
-      auto linearSolver = g2o::make_unique<LinearSolverEigen<typename BlockSolverPL<p, l>::PoseMatrixType>>();
+      auto linearSolver = g2o::make_unique<LinearSolverPcgEigen<typename BlockSolverPL<p, l>::PoseMatrixType>>();
       linearSolver->setBlockOrdering(blockorder);
       return g2o::make_unique<BlockSolverPL<p, l>>(std::move(linearSolver));
     }
@@ -109,4 +110,7 @@ namespace g2o {
   G2O_REGISTER_OPTIMIZATION_ALGORITHM(lm_var_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("lm_var_eigen", "Levenberg: Cholesky solver using Eigen's Sparse Cholesky methods (variable blocksize)", "Eigen", false, Eigen::Dynamic, Eigen::Dynamic)));
 
   G2O_REGISTER_OPTIMIZATION_ALGORITHM(dl_var_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("dl_var_eigen", "Dogleg: Cholesky solver using Eigen's Sparse Cholesky methods (variable blocksize)", "Eigen", false, Eigen::Dynamic, Eigen::Dynamic)));
+
+  G2O_REGISTER_OPTIMIZATION_ALGORITHM(lm_var_pcg_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("lm_var_pcg_eigen", "Levenberg: PCG solver using Eigen Library methods (variable blocksize)", "Eigen", false, Eigen::Dynamic, Eigen::Dynamic)));
+
 }
