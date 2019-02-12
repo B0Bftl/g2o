@@ -37,6 +37,7 @@ robust_kernel.cpp robust_kernel.h
 robust_kernel_impl.cpp robust_kernel_impl.h
 robust_kernel_factory.cpp robust_kernel_factory.h
 g2o_core_api.h
+jacobi_solver.hpp jacobi_solver.h
 )
 
 set_target_properties(core PROPERTIES OUTPUT_NAME ${LIB_PREFIX}core)
