@@ -32,6 +32,7 @@
 
 #include "g2o/core/sparse_optimizer.h"
 #include "g2o/core/block_solver.h"
+#include "g2o/core/jacobi_solver.h"
 #include "g2o/core/solver.h"
 #include "g2o/core/robust_kernel_impl.h"
 #include "g2o/core/optimization_algorithm_levenberg.h"
@@ -127,15 +128,15 @@ int main(int argc, const char* argv[]){
 
   g2o::SparseOptimizer optimizer;
   optimizer.setVerbose(false);
-  std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;
+  std::unique_ptr<g2o::JacobiSolver_6_3 ::LinearSolverType> linearSolver;
   if (DENSE) {
-    linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   } else {
-    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   }
 
   g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
-    g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
+    g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolver))
   );
   optimizer.setAlgorithm(solver);
 
@@ -149,10 +150,16 @@ int main(int argc, const char* argv[]){
   }
 
   double focal_length= 1000.;
+  double fx = 1000.;
+  double fy = 1000.;
+  double cx = 320.;
+  double cy = 240.;
   Vector2d principal_point(320., 240.);
 
   vector<g2o::SE3Quat,
       aligned_allocator<g2o::SE3Quat> > true_poses;
+
+
   g2o::CameraParameters * cam_params
       = new g2o::CameraParameters (focal_length, principal_point, 0.);
   cam_params->setId(0);
@@ -160,7 +167,7 @@ int main(int argc, const char* argv[]){
   if (!optimizer.addParameter(cam_params)) {
     assert(false);
   }
-
+  // Cameras
   int vertex_id = 0;
   for (size_t i=0; i<15; ++i) {
     Vector3d trans(i*0.04-1.,0,0);
@@ -175,6 +182,7 @@ int main(int argc, const char* argv[]){
       v_se3->setFixed(true);
     }
     v_se3->setEstimate(pose);
+
     optimizer.addVertex(v_se3);
     true_poses.push_back(pose);
     vertex_id++;
@@ -187,6 +195,7 @@ int main(int argc, const char* argv[]){
   unordered_map<int,int> pointid_2_trueid;
   unordered_set<int> inliers;
 
+  // Points
   for (size_t i=0; i<true_points.size(); ++i){
     g2o::VertexSBAPointXYZ * v_p
         = new g2o::VertexSBAPointXYZ();
@@ -219,8 +228,8 @@ int main(int argc, const char* argv[]){
           }
           z += Vector2d(Sample::gaussian(PIXEL_NOISE),
                         Sample::gaussian(PIXEL_NOISE));
-          g2o::EdgeProjectXYZ2UV * e
-              = new g2o::EdgeProjectXYZ2UV();
+          g2o::EdgeSE3ProjectXYZ * e
+              = new g2o::EdgeSE3ProjectXYZ();
           e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(v_p));
           e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>
                        (optimizer.vertices().find(j)->second));
@@ -231,6 +240,11 @@ int main(int argc, const char* argv[]){
             e->setRobustKernel(rk);
           }
           e->setParameterId(0, 0);
+          e->fx = focal_length;
+          e->fy = focal_length;
+          e->cx = cx;
+          e->cy = cy;
+
           optimizer.addEdge(e);
         }
       }

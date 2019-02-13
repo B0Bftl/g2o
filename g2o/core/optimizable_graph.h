@@ -417,6 +417,7 @@ namespace g2o {
          */
         virtual void linearizeOplus(JacobianWorkspace& jacobianWorkspace) = 0;
 
+
         /** set the estimate of the to vertex, based on the estimate of the from vertices in the edge. */
         virtual void initialEstimate(const OptimizableGraph::VertexSet& from, OptimizableGraph::Vertex* to) = 0;
 

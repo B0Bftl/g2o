@@ -28,6 +28,7 @@
 #define G2O_BLOCK_SOLVER_H
 
 #include <Eigen/Core>
+#include "Eigen/Sparse"
 #include "solver.h"
 #include "linear_solver.h"
 #include "sparse_block_matrix.h"
@@ -150,6 +151,7 @@ namespace g2o {
 
       void deallocate();
 
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _Jacobi;
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
       std::unique_ptr<SparseBlockMatrix<PoseLandmarkMatrixType>> _Hpl;

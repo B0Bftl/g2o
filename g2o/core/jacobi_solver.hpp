@@ -95,6 +95,8 @@ void JacobiSolver<Traits>::deallocate()
     
     _HplCCS.reset();
     _HschurTransposedCCS.reset();
+
+    //TODO: reset Jacobi
 }
 
 template <typename Traits>
@@ -474,6 +476,7 @@ bool JacobiSolver<Traits>::buildSystem()
     v->clearQuadraticForm();
   }
   _Hpp->clear();
+  //TODO: Clear Jacobi
   if (_doSchur) {
     _Hll->clear();
     _Hpl->clear();
@@ -489,10 +492,65 @@ bool JacobiSolver<Traits>::buildSystem()
   JacobianWorkspace jacobianWorkspace = _optimizer->jacobianWorkspace();
 # pragma omp parallel for default (shared) firstprivate(jacobianWorkspace) if (_optimizer->activeEdges().size() > 100)
 # endif
+  std::vector<Eigen::Triplet<number_t>> jacobiDataP;
+  std::vector<Eigen::Triplet<number_t>> jacobiDataC;
+
+  //TODO: Find correct values here
+  jacobiDataP.reserve(_numLandmarks * LandmarkDim);
+  jacobiDataC.reserve(_numPoses * PoseDim);
+
+  number_t* data;
+
   for (int k = 0; k < static_cast<int>(_optimizer->activeEdges().size()); ++k) {
     OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
     e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
     e->constructQuadraticForm();
+
+    const OptimizableGraph::Vertex* vi = static_cast<const OptimizableGraph::Vertex*>(e->vertex(0));
+    const OptimizableGraph::Vertex* vj = static_cast<const OptimizableGraph::Vertex*>(e->vertex(1));
+
+    data = jacobianWorkspace.workspaceForVertex(0);
+
+    if(vi->marginalized()) {
+      // Point
+      std::cout << "point:" << std::endl;
+      for (int i = 0; i < 6 ; i++) {
+        std::cout << data[i] << std::endl;
+      }
+      std::cout << "end" << std::endl;
+
+    } else {
+      // Camera
+      std::cout << "camera:" << std::endl;
+      for (int i = 0; i < 12 ; i++) {
+        std::cout << data[i] << std::endl;
+      }
+      std::cout << "end" << std::endl;
+    }
+
+    data = jacobianWorkspace.workspaceForVertex(1);
+
+    if(vj->marginalized()) {
+      // Point
+      std::cout << "point:" << std::endl;
+      for (int i = 0; i < 6 ; i++) {
+        std::cout << data[i] << std::endl;
+      }
+      std::cout << "end" << std::endl;
+
+    } else {
+      // Camera
+      std::cout << "camera:" << std::endl;
+      for (int i = 0; i < 12 ; i++) {
+        std::cout << data[i] << std::endl;
+      }
+      std::cout << "end" << std::endl;
+
+    }
+
+
+    // Here i want to generate triplets according to Xj, Xi
+
 #  ifndef NDEBUG
     for (size_t i = 0; i < e->vertices().size(); ++i) {
       const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(e->vertex(i));
