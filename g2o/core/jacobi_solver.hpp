@@ -513,8 +513,18 @@ bool JacobiSolver<Traits>::buildSystem()
 
   number_t* data;
 
-  for (int k = 0; k < sizeEdges; ++k) {
-    OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
+
+  for (int k = 0;k < _optimizer->indexMapping().size(); ++k) {
+    const OptimizableGraph::Vertex* vi = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[k]);
+    if(vi->marginalized()) continue;
+
+    for (OptimizableGraph::EdgeSet::const_iterator it=vi->edges().begin(); it!=vi->edges().end(); ++it){
+      OptimizableGraph::Edge* e = reinterpret_cast<OptimizableGraph::Edge*>(*it);
+      if (!e->active()) continue;
+
+
+  //for (int k = 0; k < sizeEdges; ++k) {
+    //OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
     e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
     e->constructQuadraticForm();
 
@@ -595,6 +605,10 @@ bool JacobiSolver<Traits>::buildSystem()
       }
     }
 #  endif
+  //}
+    }
+
+
   }
 
   // flush the current system in a sparse block matrix
@@ -606,7 +620,7 @@ bool JacobiSolver<Traits>::buildSystem()
   _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
   _JacobiC->resize(sizeEdges * 2, sizeEdges * 6);
   _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
-  
+
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
     int iBase = v->colInHessian();
@@ -614,6 +628,10 @@ bool JacobiSolver<Traits>::buildSystem()
       iBase+=_sizePoses;
     v->copyB(_b+iBase);
   }
+
+  //saveMarket(_JacobiP, "/home/lukas/Documents/eigenMatrices/jP.matx");
+  //saveMarket(_JacobiC, "/home/lukas/Documents/eigenMatrices/jC.matx");
+  saveHessian("/home/lukas/Documents/eigenMatrices/hessian.txt");
 
   return false;
 }

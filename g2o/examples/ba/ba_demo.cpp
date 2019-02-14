@@ -142,7 +142,7 @@ int main(int argc, const char* argv[]){
 
 
   vector<Vector3d> true_points;
-  for (size_t i=0;i<500; ++i)
+  for (size_t i=0;i<10; ++i)
   {
     true_points.push_back(Vector3d((Sample::uniform()-0.5)*3,
                                    Sample::uniform()-0.5,
@@ -167,7 +167,7 @@ int main(int argc, const char* argv[]){
   }
   // Cameras
   int vertex_id = 0;
-  for (size_t i=0; i<15; ++i) {
+  for (size_t i=0; i<3; ++i) {
     Vector3d trans(i*0.04-1.,0,0);
 
     Eigen:: Quaterniond q;

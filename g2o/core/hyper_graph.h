@@ -191,6 +191,10 @@ namespace g2o {
             */
           void setVertex(size_t i, Vertex* v) { assert(i < _vertices.size() && "index out of bounds"); _vertices[i]=v;}
 
+          void setActive(bool active) {isActive = active;};
+
+          bool active() const {return isActive;};
+
           int id() const {return _id;}
           void setId(int id);
           virtual HyperGraphElementType elementType() const { return HGET_EDGE;}
@@ -199,6 +203,7 @@ namespace g2o {
         protected:
           VertexContainer _vertices;
           int _id; ///< unique id
+          bool isActive;
       };
 
     public:
