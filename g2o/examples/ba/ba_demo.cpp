@@ -150,8 +150,6 @@ int main(int argc, const char* argv[]){
   }
 
   double focal_length= 1000.;
-  double fx = 1000.;
-  double fy = 1000.;
   double cx = 320.;
   double cy = 240.;
   Vector2d principal_point(320., 240.);

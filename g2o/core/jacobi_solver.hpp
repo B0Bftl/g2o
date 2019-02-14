@@ -67,6 +67,8 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
     _coefficients.reset(allocate_aligned<number_t>(s));
     _bschur.reset(allocate_aligned<number_t>(_sizePoses));
   }
+  _JacobiC = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
+  _JacobiP = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
 
   _Hpp= g2o::make_unique<PoseHessianType>(blockPoseIndices, blockPoseIndices, numPoseBlocks, numPoseBlocks);
   if (_doSchur) {
@@ -85,6 +87,8 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
 template <typename Traits>
 void JacobiSolver<Traits>::deallocate()
 {
+    //_JacobiP->resize(0,0);
+    //_JacobiC->resize(0,0);
     _Hpp.reset();
     _Hll.reset();
     _Hpl.reset();
@@ -95,8 +99,6 @@ void JacobiSolver<Traits>::deallocate()
     
     _HplCCS.reset();
     _HschurTransposedCCS.reset();
-
-    //TODO: reset Jacobi
 }
 
 template <typename Traits>
@@ -496,12 +498,22 @@ bool JacobiSolver<Traits>::buildSystem()
   std::vector<Eigen::Triplet<number_t>> jacobiDataC;
 
   //TODO: Find correct values here
-  jacobiDataP.reserve(_numLandmarks * LandmarkDim);
-  jacobiDataC.reserve(_numPoses * PoseDim);
+  int sizeEdges = static_cast<int>(_optimizer->activeEdges().size());
+  jacobiDataP.reserve(sizeEdges * 6);
+  jacobiDataC.reserve(sizeEdges * 12);
+
+  int rowsP = 2;
+  int colsP = 3;
+
+  int rowsC = 2;
+  int colsC = 6;
+
+  int offsetCol;
+  int offsetRow;
 
   number_t* data;
 
-  for (int k = 0; k < static_cast<int>(_optimizer->activeEdges().size()); ++k) {
+  for (int k = 0; k < sizeEdges; ++k) {
     OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
     e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
     e->constructQuadraticForm();
@@ -513,43 +525,63 @@ bool JacobiSolver<Traits>::buildSystem()
 
     if(vi->marginalized()) {
       // Point
-      std::cout << "point:" << std::endl;
-      for (int i = 0; i < 6 ; i++) {
-        std::cout << data[i] << std::endl;
-      }
-      std::cout << "end" << std::endl;
+      offsetRow = k * rowsP;
+      offsetCol = k * colsP;
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
 
     } else {
       // Camera
-      std::cout << "camera:" << std::endl;
-      for (int i = 0; i < 12 ; i++) {
-        std::cout << data[i] << std::endl;
-      }
-      std::cout << "end" << std::endl;
+      offsetRow = k * rowsC;
+      offsetCol = k * colsC;
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
     }
 
     data = jacobianWorkspace.workspaceForVertex(1);
 
     if(vj->marginalized()) {
       // Point
-      std::cout << "point:" << std::endl;
-      for (int i = 0; i < 6 ; i++) {
-        std::cout << data[i] << std::endl;
-      }
-      std::cout << "end" << std::endl;
+      offsetRow = k * rowsP;
+      offsetCol = k * colsP;
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+      jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+      jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
 
     } else {
       // Camera
-      std::cout << "camera:" << std::endl;
-      for (int i = 0; i < 12 ; i++) {
-        std::cout << data[i] << std::endl;
-      }
-      std::cout << "end" << std::endl;
-
+      offsetRow = k * rowsC;
+      offsetCol = k * colsC;
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+      jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+      jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
     }
-
-
-    // Here i want to generate triplets according to Xj, Xi
 
 #  ifndef NDEBUG
     for (size_t i = 0; i < e->vertices().size(); ++i) {
@@ -569,6 +601,12 @@ bool JacobiSolver<Traits>::buildSystem()
 # ifdef G2O_OPENMP
 # pragma omp parallel for default (shared) if (_optimizer->indexMapping().size() > 1000)
 # endif
+
+  _JacobiP->resize(sizeEdges * 2, sizeEdges * 3);
+  _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
+  _JacobiC->resize(sizeEdges * 2, sizeEdges * 6);
+  _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
+  
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
     int iBase = v->colInHessian();

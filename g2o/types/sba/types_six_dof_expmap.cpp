@@ -422,7 +422,7 @@ void EdgeSE3ProjectXYZ::linearizeOplus() {
   _jacobianOplusXj(1, 3) = 0;
   _jacobianOplusXj(1, 4) = -1. / z * fy;
   _jacobianOplusXj(1, 5) = y / z_2 * fy;
-
+ /*
   std::cout << "2x6" << std::endl;
   for (int i = 0; i<2;i++){
     for(int j = 0;j<6;j++) {
@@ -437,7 +437,7 @@ void EdgeSE3ProjectXYZ::linearizeOplus() {
     }
   }
   std::cout << "end" << std::endl;
-
+  */
 }
 
 Vector2 EdgeSE3ProjectXYZ::cam_project(const Vector3 &trans_xyz) const {

@@ -88,6 +88,7 @@ namespace g2o {
   class JacobiSolver: public BlockSolverBase
   {
     public:
+	  typedef Eigen::Triplet<number_t> T;
       static const int PoseDim = Traits::PoseDim;
       static const int LandmarkDim = Traits::LandmarkDim;
       typedef typename Traits::PoseMatrixType PoseMatrixType;
@@ -137,6 +138,9 @@ namespace g2o {
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
 
       void deallocate();
+
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiC;
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiP;
 
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
