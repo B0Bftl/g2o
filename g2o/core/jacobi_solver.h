@@ -120,7 +120,7 @@ namespace g2o {
       virtual bool computeMarginals(SparseBlockMatrix<MatrixX>& spinv, const std::vector<std::pair<int, int> >& blockIndices);
       virtual bool setLambda(number_t lambda, bool backup = false);
       virtual void restoreDiagonal();
-      virtual bool supportsSchur() {return false;}
+      virtual bool supportsSchur() {return true;}
       virtual bool schur() { return _doSchur;}
       virtual void setSchur(bool s) { _doSchur = s;}
 

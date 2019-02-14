@@ -38,6 +38,8 @@
 #include "g2o/core/optimization_algorithm_levenberg.h"
 #include "g2o/solvers/cholmod/linear_solver_cholmod.h"
 #include "g2o/solvers/dense/linear_solver_dense.h"
+#include "g2o/solvers/eigen/linear_solver_eigen.h"
+#include "g2o/solvers/pcg/linear_solver_pcg.h"
 #include "g2o/types/sba/types_six_dof_expmap.h"
 //#include "g2o/math_groups/se3quat.h"
 #include "g2o/solvers/structure_only/structure_only_solver.h"
@@ -118,11 +120,23 @@ int main(int argc, const char* argv[]){
     DENSE = atoi(argv[5]) != 0;
   }
 
+  int numCameras = 15;
+	if (argc>6){
+		numCameras = atoi(argv[6]);
+	}
+
+	int numPoints = 300;
+	if (argc>7){
+		numPoints = atoi(argv[7]);
+	}
+
   cout << "PIXEL_NOISE: " <<  PIXEL_NOISE << endl;
   cout << "OUTLIER_RATIO: " << OUTLIER_RATIO<<  endl;
   cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
   cout << "STRUCTURE_ONLY: " << STRUCTURE_ONLY<< endl;
   cout << "DENSE: "<<  DENSE << endl;
+	cout << "Cameras: "<<  numCameras << endl;
+	cout << "Points: "<<  numPoints << endl;
 
 
 
@@ -132,7 +146,7 @@ int main(int argc, const char* argv[]){
   if (DENSE) {
     linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   } else {
-    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverPCG<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   }
 
   g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -142,7 +156,7 @@ int main(int argc, const char* argv[]){
 
 
   vector<Vector3d> true_points;
-  for (size_t i=0;i<10; ++i)
+  for (int i=0;i<numPoints; ++i)
   {
     true_points.push_back(Vector3d((Sample::uniform()-0.5)*3,
                                    Sample::uniform()-0.5,
@@ -167,7 +181,7 @@ int main(int argc, const char* argv[]){
   }
   // Cameras
   int vertex_id = 0;
-  for (size_t i=0; i<3; ++i) {
+  for (int i=0; i<numCameras; ++i) {
     Vector3d trans(i*0.04-1.,0,0);
 
     Eigen:: Quaterniond q;
@@ -176,7 +190,7 @@ int main(int argc, const char* argv[]){
     g2o::VertexSE3Expmap * v_se3
         = new g2o::VertexSE3Expmap();
     v_se3->setId(vertex_id);
-    if (i<2){
+    if (i<1){
       v_se3->setFixed(true);
     }
     v_se3->setEstimate(pose);
