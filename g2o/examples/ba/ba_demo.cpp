@@ -199,7 +199,7 @@ int main(int argc, const char* argv[]){
     g2o::VertexSE3Expmap * v_se3
         = new g2o::VertexSE3Expmap();
     v_se3->setId(vertex_id);
-    if (i<0){
+    if (i<1){
       v_se3->setFixed(true);
     }
     v_se3->setEstimate(pose);

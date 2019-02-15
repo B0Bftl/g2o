@@ -546,7 +546,7 @@ bool JacobiSolver<Traits>::buildSystem()
       e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
       e->constructQuadraticForm();
 
-      if(vi->fixed() || vj->fixed()) continue;
+      //if(vi->fixed() || vj->fixed()) continue;
       ++rowCount;
       // We only
 
@@ -555,6 +555,7 @@ bool JacobiSolver<Traits>::buildSystem()
         if(vi->marginalized()) {
           // Point
           // We know that we are sorted
+          e->
           offsetRow = rowCount * rowsP;
           offsetCol = ((_numPoses) * colsC) + ((vi->hessianIndex() - _numPoses) * colsP);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
