@@ -514,6 +514,10 @@ bool JacobiSolver<Traits>::buildSystem()
 
   int rowCount = -1;
 
+  std::set<int> setFixedPoints;
+  std::set<int> setFixedCameras;
+
+
   number_t* data;
 
 
@@ -527,15 +531,18 @@ bool JacobiSolver<Traits>::buildSystem()
       if (!e->active()) continue;
       // get all active vertices and linearize their constraint
 
-      ++rowCount;
       const OptimizableGraph::Vertex* vi = static_cast<const OptimizableGraph::Vertex*>(e->vertex(0));
       const OptimizableGraph::Vertex* vj = static_cast<const OptimizableGraph::Vertex*>(e->vertex(1));
+
+
 
       //for (int k = 0; k < sizeEdges; ++k) {
       //OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
       e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
       e->constructQuadraticForm();
 
+      if(vi->fixed() || vj->fixed()) continue;
+      ++rowCount;
       // We only
 
       data = jacobianWorkspace.workspaceForVertex(0);
@@ -544,7 +551,7 @@ bool JacobiSolver<Traits>::buildSystem()
           // Point
           // We know that we are sorted
           offsetRow = rowCount * rowsP;
-          offsetCol = (_numPoses * colsC) + (vi->hessianIndex() * colsP);
+          offsetCol = ((_numPoses) * colsC) + (vi->hessianIndex() * colsP);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
           jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -554,7 +561,7 @@ bool JacobiSolver<Traits>::buildSystem()
         } else {
           // Camera
           offsetRow = rowCount * rowsC;
-          offsetCol = vi->hessianIndex() * colsC;
+          offsetCol = (vi->hessianIndex()) * colsC;
           jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
           jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
           jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -569,13 +576,15 @@ bool JacobiSolver<Traits>::buildSystem()
           jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
         }
       }
+
+
       data = jacobianWorkspace.workspaceForVertex(1);
       if(vj->hessianIndex() >= 0){
         if(vj->marginalized()) {
           // Point
           // We know that we are sorted
             offsetRow = rowCount * rowsP;
-            offsetCol = (_numPoses * colsC) + (vj->hessianIndex() * colsP);
+            offsetCol = ((_numPoses) * colsC) + (vj->hessianIndex() * colsP);
             jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
             jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
             jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -585,7 +594,7 @@ bool JacobiSolver<Traits>::buildSystem()
         } else {
           // Camera
             offsetRow = rowCount * rowsC;
-            offsetCol = vj->hessianIndex() * colsC;
+            offsetCol = (vj->hessianIndex()) * colsC;
             jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
             jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
             jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -600,6 +609,12 @@ bool JacobiSolver<Traits>::buildSystem()
             jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
         }
       }
+
+      if(vi->fixed() && vi->marginalized()) setFixedPoints.insert(vi->id());
+      if(vi->fixed() && !vi->marginalized()) setFixedCameras.insert(vi->id());
+      if(vj->fixed() && vj->marginalized()) setFixedPoints.insert(vj->id());
+      if(vj->fixed() && !vj->marginalized()) setFixedCameras.insert(vj->id());
+
 
       # ifndef NDEBUG
       for (size_t i = 0; i < e->vertices().size(); ++i) {
@@ -622,18 +637,34 @@ bool JacobiSolver<Traits>::buildSystem()
 # pragma omp parallel for default (shared) if (_optimizer->indexMapping().size() > 1000)
 # endif
 
-  _JacobiP->resize(sizeEdges * 2, sizeEdges * 3);
+  int dimCam = (static_cast<int>(setFixedCameras.size()) + _numPoses) * 6;
+  int dimPoints = (static_cast<int>(setFixedPoints.size())+ 2 + _numLandmarks) * 3;
+  int rowDim = (rowCount + static_cast<int>(setFixedCameras.size()) + 1 + static_cast<int>(setFixedPoints.size())) * 2;
+
+  std::cout << "P";
+  for(auto const& t : jacobiDataP) {
+      std::cout << t.row() << "," << t.col() << ":" << t.value() << std::endl;
+
+  }
+  std::cout << std::endl<< std::endl;
+  std::cout << "C";
+  for(auto const& t : jacobiDataC) {
+    std::cout << t.row() << "," << t.col() << ":" << t.value() << std::endl;
+
+  }
+
+
+  _JacobiP->resize(rowDim, dimCam + dimPoints);
   _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
-  _JacobiC->resize(sizeEdges * 2, sizeEdges * 6);
+  _JacobiC->resize(rowDim, dimCam);
   _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
   std::move(jacobiDataC.begin(), jacobiDataC.end(), std::back_inserter(jacobiDataP));
 
-  Eigen::SparseMatrix<number_t> _jacobiFull(sizeEdges * 2, sizeEdges * 6 + sizeEdges * 3);
+  Eigen::SparseMatrix<number_t> _jacobiFull(rowDim, dimCam + dimPoints);
   _jacobiFull.setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
 
-  Eigen::SparseMatrix<number_t > _hessian(sizeEdges * 6 + sizeEdges * 3,sizeEdges * 6 + sizeEdges * 3);
+  Eigen::SparseMatrix<number_t > _hessian(dimCam + dimPoints, dimCam + dimPoints);
   _hessian = (_jacobiFull.transpose()) * _jacobiFull;
-
 
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
@@ -644,13 +675,13 @@ bool JacobiSolver<Traits>::buildSystem()
   }
 
 
-  /*
+
   saveMarket((*_JacobiP), "/home/lukas/Documents/eigenMatrices/jP.matx");
   saveMarket((*_JacobiC), "/home/lukas/Documents/eigenMatrices/jC.matx");
   saveMarket((_jacobiFull), "/home/lukas/Documents/eigenMatrices/jFull.matx");
   saveMarket((_hessian), "/home/lukas/Documents/eigenMatrices/hessian.matx");
   saveHessian("/home/lukas/Documents/eigenMatrices/hessian.txt");
-*/
+
   return false;
 }
 

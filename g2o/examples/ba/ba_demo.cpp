@@ -92,7 +92,9 @@ int main(int argc, const char* argv[]){
     cout << "OUTLIER_RATIO: probability of spuroius observation  (default: 0.0)" << endl;
     cout << "ROBUST_KERNEL: use robust kernel (0 or 1; default: 0==false)" << endl;
     cout << "STRUCTURE_ONLY: performe structure-only BA to get better point initializations (0 or 1; default: 0==false)" << endl;
-    cout << "DENSE: Use dense solver (0 or 1; default: 0==false)" << endl;
+    cout << "Linsolver: 0-3" << endl;
+    cout << "numCameras" << endl;
+    cout << "numPoints" << endl;
     cout << endl;
     cout << "Note, if OUTLIER_RATIO is above 0, ROBUST_KERNEL should be set to 1==true." << endl;
     cout << endl;
