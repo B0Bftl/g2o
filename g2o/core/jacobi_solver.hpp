@@ -642,7 +642,7 @@ bool JacobiSolver<Traits>::buildSystem()
   int dimPoints = (_numLandmarks) * 3;
   int rowDim = (rowCount + 1) * 2;
 
-
+  /*
   std::cout << "P" << std::endl;
   for(auto const& t : jacobiDataP) {
     std::cout << t.row() << "," << t.col() << ":" << std::endl;
@@ -652,7 +652,7 @@ bool JacobiSolver<Traits>::buildSystem()
   for(auto const& t : jacobiDataC) {
     std::cout << t.row() << "," << t.col() << ":" << std::endl;
   }
-
+  */
   _JacobiP->resize(rowDim, dimCam + dimPoints);
   _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
   _JacobiC->resize(rowDim, dimCam);
@@ -672,13 +672,13 @@ bool JacobiSolver<Traits>::buildSystem()
       iBase+=_sizePoses;
     v->copyB(_b+iBase);
   }
-
+  /*
   saveMarket((*_JacobiP), "/home/lukas/Documents/eigenMatrices/jP.matx");
   saveMarket((*_JacobiC), "/home/lukas/Documents/eigenMatrices/jC.matx");
   saveMarket((_jacobiFull), "/home/lukas/Documents/eigenMatrices/jFull.matx");
   saveMarket((_hessian), "/home/lukas/Documents/eigenMatrices/hessian.matx");
   saveHessian("/home/lukas/Documents/eigenMatrices/hessian.txt");
-
+  */
   return false;
 }
 
