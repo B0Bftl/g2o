@@ -555,7 +555,6 @@ bool JacobiSolver<Traits>::buildSystem()
         if(vi->marginalized()) {
           // Point
           // We know that we are sorted
-          e->
           offsetRow = rowCount * rowsP;
           offsetCol = ((_numPoses) * colsC) + ((vi->hessianIndex() - _numPoses) * colsP);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
