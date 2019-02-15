@@ -556,7 +556,7 @@ bool JacobiSolver<Traits>::buildSystem()
           // Point
           // We know that we are sorted
           offsetRow = rowCount * rowsP;
-          offsetCol = ((_numPoses - 1) * colsC) + (vi->hessianIndex() * colsP);
+          offsetCol = ((_numPoses) * colsC) + ((vi->hessianIndex() - _numPoses) * colsP);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
           jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
           jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -589,7 +589,7 @@ bool JacobiSolver<Traits>::buildSystem()
           // Point
           // We know that we are sorted
             offsetRow = rowCount * rowsP;
-            offsetCol = ((_numPoses - 1) * colsC) + (vj->hessianIndex() * colsP);
+            offsetCol = ((_numPoses) * colsC) + ((vj->hessianIndex() - _numPoses) * colsP);
             jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
             jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
             jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
@@ -640,7 +640,7 @@ bool JacobiSolver<Traits>::buildSystem()
 
   int dimCam = (_numPoses) * 6;
   int dimPoints = (_numLandmarks) * 3;
-  int rowDim = (rowCount + static_cast<int>(setFixedPoints.size()) + static_cast<int>(setFixedCameras.size()) + static_cast<int>(setFixedPoints.size())) * 2;
+  int rowDim = (rowCount + 1) * 2;
 
 
   std::cout << "P" << std::endl;
@@ -672,8 +672,6 @@ bool JacobiSolver<Traits>::buildSystem()
       iBase+=_sizePoses;
     v->copyB(_b+iBase);
   }
-
-
 
   saveMarket((*_JacobiP), "/home/lukas/Documents/eigenMatrices/jP.matx");
   saveMarket((*_JacobiC), "/home/lukas/Documents/eigenMatrices/jC.matx");
