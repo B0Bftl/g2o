@@ -512,6 +512,8 @@ bool JacobiSolver<Traits>::buildSystem()
   int offsetCol;
   int offsetRow;
 
+  int rowCount = -1;
+
   number_t* data;
 
 
@@ -525,7 +527,7 @@ bool JacobiSolver<Traits>::buildSystem()
       if (!e->active()) continue;
       // get all active vertices and linearize their constraint
 
-
+      ++rowCount;
       const OptimizableGraph::Vertex* vi = static_cast<const OptimizableGraph::Vertex*>(e->vertex(0));
       const OptimizableGraph::Vertex* vj = static_cast<const OptimizableGraph::Vertex*>(e->vertex(1));
 
@@ -537,69 +539,66 @@ bool JacobiSolver<Traits>::buildSystem()
       // We only
 
       data = jacobianWorkspace.workspaceForVertex(0);
-
-      if(vi->marginalized()) {
-        // Point
-        // We know that we are sorted
-
-        vi->hessianIndex();
-
-        offsetRow = k * rowsP;
-        offsetCol = (_numPoses * colsC) + (vi->hessianIndex() * colsP);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-
-      } else {
-        // Camera
-        offsetRow = k * rowsC;
-        offsetCol = vi->hessianIndex() * colsC;
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+      if(vi->hessianIndex() >= 0){
+        if(vi->marginalized()) {
+          // Point
+          // We know that we are sorted
+          offsetRow = rowCount * rowsP;
+          offsetCol = (_numPoses * colsC) + (vi->hessianIndex() * colsP);
+          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+        } else {
+          // Camera
+          offsetRow = rowCount * rowsC;
+          offsetCol = vi->hessianIndex() * colsC;
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+        }
       }
-
       data = jacobianWorkspace.workspaceForVertex(1);
-
-      if(vj->marginalized()) {
-        // Point
-        offsetRow = k * rowsP;
-        offsetCol = (_numPoses * colsC) + (vi->hessianIndex() * colsP);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-        jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-        jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-
-      } else {
-        // Camera
-        offsetRow = k * rowsC;
-        offsetCol = vi->hessianIndex() * colsC;
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-        jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-        jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+      if(vj->hessianIndex() >= 0){
+        if(vj->marginalized()) {
+          // Point
+          // We know that we are sorted
+            offsetRow = rowCount * rowsP;
+            offsetCol = (_numPoses * colsC) + (vj->hessianIndex() * colsP);
+            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+        } else {
+          // Camera
+            offsetRow = rowCount * rowsC;
+            offsetCol = vj->hessianIndex() * colsC;
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+        }
       }
 
       # ifndef NDEBUG
@@ -627,6 +626,14 @@ bool JacobiSolver<Traits>::buildSystem()
   _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
   _JacobiC->resize(sizeEdges * 2, sizeEdges * 6);
   _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
+  std::move(jacobiDataC.begin(), jacobiDataC.end(), std::back_inserter(jacobiDataP));
+
+  Eigen::SparseMatrix<number_t> _jacobiFull(sizeEdges * 2, sizeEdges * 6 + sizeEdges * 3);
+  _jacobiFull.setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
+
+  Eigen::SparseMatrix<number_t > _hessian(sizeEdges * 6 + sizeEdges * 3,sizeEdges * 6 + sizeEdges * 3);
+  _hessian = (_jacobiFull.transpose()) * _jacobiFull;
+
 
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
@@ -636,10 +643,14 @@ bool JacobiSolver<Traits>::buildSystem()
     v->copyB(_b+iBase);
   }
 
+
+  /*
   saveMarket((*_JacobiP), "/home/lukas/Documents/eigenMatrices/jP.matx");
   saveMarket((*_JacobiC), "/home/lukas/Documents/eigenMatrices/jC.matx");
+  saveMarket((_jacobiFull), "/home/lukas/Documents/eigenMatrices/jFull.matx");
+  saveMarket((_hessian), "/home/lukas/Documents/eigenMatrices/hessian.matx");
   saveHessian("/home/lukas/Documents/eigenMatrices/hessian.txt");
-
+*/
   return false;
 }
 
@@ -712,7 +723,13 @@ void JacobiSolver<Traits>::setWriteDebug(bool writeDebug)
 template <typename Traits>
 bool JacobiSolver<Traits>::saveHessian(const std::string& fileName) const
 {
-  return _Hpp->writeOctave(fileName.c_str(), true);
+	std::string pp = "pp";
+	std::string ll = "ll";
+	std::string pl = "pl";
+
+    return _Hpp->writeOctave((fileName + pp).c_str(), true)
+	  && _Hpl->writeOctave((fileName + pl).c_str(), true)
+	  && _Hll->writeOctave((fileName + ll).c_str(), true);
 }
 
 } // end namespace

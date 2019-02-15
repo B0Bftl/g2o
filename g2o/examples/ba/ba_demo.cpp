@@ -115,9 +115,9 @@ int main(int argc, const char* argv[]){
     STRUCTURE_ONLY = atoi(argv[4]) != 0;
   }
 
-  bool DENSE = false;
+  int linSolver = 0;
   if (argc>5){
-    DENSE = atoi(argv[5]) != 0;
+    linSolver = atoi(argv[5]) != 0;
   }
 
   int numCameras = 15;
@@ -134,7 +134,7 @@ int main(int argc, const char* argv[]){
   cout << "OUTLIER_RATIO: " << OUTLIER_RATIO<<  endl;
   cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
   cout << "STRUCTURE_ONLY: " << STRUCTURE_ONLY<< endl;
-  cout << "DENSE: "<<  DENSE << endl;
+  cout << "LinSolver: "<<  linSolver << endl;
 	cout << "Cameras: "<<  numCameras << endl;
 	cout << "Points: "<<  numPoints << endl;
 
@@ -143,11 +143,18 @@ int main(int argc, const char* argv[]){
   g2o::SparseOptimizer optimizer;
   optimizer.setVerbose(false);
   std::unique_ptr<g2o::JacobiSolver_6_3 ::LinearSolverType> linearSolver;
-  if (DENSE) {
+  if (linSolver == 0) {
     linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::JacobiSolver_6_3::PoseMatrixType>>();
-  } else {
+  } else if(linSolver == 1) {
+    linearSolver = g2o::make_unique<g2o::LinearSolverEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+  } else if(linSolver == 2) {
+    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+  } else if(linSolver == 3) {
     linearSolver = g2o::make_unique<g2o::LinearSolverPCG<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+  } else {
+    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   }
+
 
   g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
     g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolver))
