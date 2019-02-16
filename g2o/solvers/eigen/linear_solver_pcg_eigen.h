@@ -138,7 +138,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::SparseMatrix<number_t> Jc = _sparseMatrix.leftCols(_numCams * 6);
       Eigen::SparseMatrix<number_t> Jp = _sparseMatrix.rightCols(_numPoints * 3);
-      
+
+      xC.setZero();
+      xP = -Jp.transpose()*bVec;
+
+      VectorX p = (-1) * _sparseMatrix.transpose() * (bVec - (_sparseMatrix * xVec));
+
+      number_t gamma = xVec.dot(xVec);
+      VectorX q = _sparseMatrix * p;
 
       if (_init) // compute the symbolic composition once
         _cholesky.analyzePattern(_sparseMatrix);
