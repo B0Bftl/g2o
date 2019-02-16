@@ -36,6 +36,7 @@
 #include "g2o/config.h"
 #include "dynamic_aligned_buffer.hpp"
 #include "block_solver.h"
+#include "Eigen/Core"
 
 #include <memory>
 
@@ -120,7 +121,7 @@ namespace g2o {
       virtual bool computeMarginals(SparseBlockMatrix<MatrixX>& spinv, const std::vector<std::pair<int, int> >& blockIndices);
       virtual bool setLambda(number_t lambda, bool backup = false);
       virtual void restoreDiagonal();
-      virtual bool supportsSchur() {return true;}
+      virtual bool supportsSchur() {return false;}
       virtual bool schur() { return _doSchur;}
       virtual void setSchur(bool s) { _doSchur = s;}
 
@@ -141,6 +142,8 @@ namespace g2o {
 
       std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiC;
       std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiP;
+	  std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _hessian;
 
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
@@ -154,6 +157,7 @@ namespace g2o {
 
       std::unique_ptr<LinearSolverType> _linearSolver;
 
+      std::vector<number_t> _diagonalHessian;
       std::vector<PoseVectorType, Eigen::aligned_allocator<PoseVectorType> > _diagonalBackupPose;
       std::vector<LandmarkVectorType, Eigen::aligned_allocator<LandmarkVectorType> > _diagonalBackupLandmark;
 

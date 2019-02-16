@@ -69,6 +69,8 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
   }
   _JacobiC = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
   _JacobiP = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
+  _jacobiFull = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
+  _hessian = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
 
   _Hpp= g2o::make_unique<PoseHessianType>(blockPoseIndices, blockPoseIndices, numPoseBlocks, numPoseBlocks);
   _Hll = g2o::make_unique<LandmarkHessianType>(blockLandmarkIndices, blockLandmarkIndices, numLandmarkBlocks, numLandmarkBlocks);
@@ -88,9 +90,16 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
 template <typename Traits>
 void JacobiSolver<Traits>::deallocate()
 {
-    //_JacobiP->resize(0,0);
-    //_JacobiC->resize(0,0);
-    _Hpp.reset();
+  if (_hessian)
+    _hessian->resize(0,0);
+  if(_jacobiFull)
+    _jacobiFull->resize(0,0);
+  if(_JacobiP)
+    _JacobiP->resize(0,0);
+  if(_JacobiC)
+    _JacobiC->resize(0,0);
+
+  _Hpp.reset();
     _Hll.reset();
     _Hpl.reset();
     _Hschur.reset();
@@ -323,7 +332,7 @@ bool JacobiSolver<Traits>::solve(){
   //cerr << __PRETTY_FUNCTION__ << endl;
   if (! _doSchur){
     number_t t=get_monotonic_time();
-    bool ok = _linearSolver->solve(*_Hpp, _x, _b);
+    bool ok = _linearSolver->solve(*_hessian, _x, _b);
     G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
       globalStats->timeLinearSolver = get_monotonic_time() - t;
@@ -659,11 +668,11 @@ bool JacobiSolver<Traits>::buildSystem()
   _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
   std::move(jacobiDataC.begin(), jacobiDataC.end(), std::back_inserter(jacobiDataP));
 
-  Eigen::SparseMatrix<number_t> _jacobiFull(rowDim, dimCam + dimPoints);
-  _jacobiFull.setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
+  _jacobiFull->resize(rowDim, dimCam + dimPoints);
+  _jacobiFull->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
 
-  Eigen::SparseMatrix<number_t > _hessian(dimCam + dimPoints, dimCam + dimPoints);
-  _hessian = (_jacobiFull.transpose()) * _jacobiFull;
+  _hessian->resize(dimCam + dimPoints, dimCam + dimPoints);
+  (*_hessian) = (*_jacobiFull).transpose() * (*_jacobiFull);
 
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
@@ -687,18 +696,31 @@ template <typename Traits>
 bool JacobiSolver<Traits>::setLambda(number_t lambda, bool backup)
 {
   if (backup) {
-    _diagonalBackupPose.resize(_numPoses);
-    _diagonalBackupLandmark.resize(_numLandmarks);
+    _diagonalHessian.reserve(_numPoses + _numLandmarks);
+    //_diagonalBackupPose.resize(_numPoses + _numLandmarks);
+    //_diagonalBackupLandmark.resize(_numLandmarks);
+    for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
+      _diagonalHessian[i] = _hessian->coeff(i,i);
+    }
   }
+
+  for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
+    number_t& ref = _hessian->coeffRef(i,i);
+    _diagonalHessian[i] = ref;
+    ref += lambda;
+  }
+
 # ifdef G2O_OPENMP
 # pragma omp parallel for default (shared) if (_numPoses > 100)
 # endif
+  /*
   for (int i = 0; i < _numPoses; ++i) {
     PoseMatrixType *b=_Hpp->block(i,i);
     if (backup)
       _diagonalBackupPose[i] = b->diagonal();
     b->diagonal().array() += lambda;
   }
+
 # ifdef G2O_OPENMP
 # pragma omp parallel for default (shared) if (_numLandmarks > 100)
 # endif
@@ -708,14 +730,20 @@ bool JacobiSolver<Traits>::setLambda(number_t lambda, bool backup)
       _diagonalBackupLandmark[i] = b->diagonal();
     b->diagonal().array() += lambda;
   }
+   */
   return true;
 }
 
 template <typename Traits>
 void JacobiSolver<Traits>::restoreDiagonal()
 {
-  assert((int) _diagonalBackupPose.size() == _numPoses && "Mismatch in dimensions");
-  assert((int) _diagonalBackupLandmark.size() == _numLandmarks && "Mismatch in dimensions");
+  //assert((int) _diagonalBackupPose.size() == _numPoses && "Mismatch in dimensions");
+  //assert((int) _diagonalBackupLandmark.size() == _numLandmarks && "Mismatch in dimensions");
+
+  for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
+    _hessian->coeffRef(i,i) = _diagonalHessian[i];
+  }
+  /*
   for (int i = 0; i < _numPoses; ++i) {
     PoseMatrixType *b=_Hpp->block(i,i);
     b->diagonal() = _diagonalBackupPose[i];
@@ -724,6 +752,7 @@ void JacobiSolver<Traits>::restoreDiagonal()
     LandmarkMatrixType *b=_Hll->block(i,i);
     b->diagonal() = _diagonalBackupLandmark[i];
   }
+   */
 }
 
 template <typename Traits>
@@ -737,6 +766,16 @@ bool JacobiSolver<Traits>::init(SparseOptimizer* optimizer, bool online)
       _Hpl->clear();
     if (_Hll)
       _Hll->clear();
+    if (_hessian)
+      _hessian->resize(0,0);
+    if(_jacobiFull)
+      _jacobiFull->resize(0,0);
+    if(_JacobiP)
+      _JacobiP->resize(0,0);
+    if(_JacobiC)
+      _JacobiC->resize(0,0);
+
+
   }
   _linearSolver->init();
   return true;

@@ -28,6 +28,7 @@
 #define G2O_LINEAR_SOLVER_H
 #include "sparse_block_matrix.h"
 #include "sparse_block_matrix_ccs.h"
+#include "Eigen/Sparse"
 
 namespace g2o {
 
@@ -56,6 +57,18 @@ class LinearSolver
      * solve system Ax = b, x and b have to allocated beforehand!!
      */
     virtual bool solve(const SparseBlockMatrix<MatrixType>& A, number_t* x, number_t* b) = 0;
+
+    /**
+     * solve caller with Eigen Matrix definition. Returns false if not defined
+     */
+    virtual bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b) {
+        (void) A;
+        (void) x;
+        (void) b;
+        std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
+        return false;
+    }
+
 
     /**
      * Inverts the diagonal blocks of A

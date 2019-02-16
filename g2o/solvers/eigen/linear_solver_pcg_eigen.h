@@ -92,6 +92,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     }
 
 
+    bool solve(const SparseBlockMatrix<MatrixType>& A, number_t* x, number_t* b) {
+      (void) A;
+      (void) x;
+      (void) b;
+      return false;
+    }
+
+
     /**
      * Solve System Ax = b for x
      * @param Reference to A, sparseBlockMatrix in g2o form, system matrix of linear system
@@ -99,22 +107,25 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @param b pointer to array containing values to solve for
      * @return true if solving was successful, false otherwise
      */
-    bool solve(const SparseBlockMatrix<MatrixType>& A, number_t* x, number_t* b)
+    bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b)
     {
+      /*
       if (_init)
         _sparseMatrix.resize(A.rows(), A.cols());
       // put A in EIGEN form, _sparseMatrix.
       fillSparseMatrix(A, !_init);
+       */
       //
       VectorX::MapType xVec(x, _sparseMatrix.cols());
       VectorX::ConstMapType bVec(b, _sparseMatrix.cols());
 
       // _sparseMatrix is now in EIGEN form, and can be used with its interface
-
+      _sparseMatrix = A;
 
 
       if (_init) // compute the symbolic composition once
-        computeSymbolicDecomposition(A);
+        _cholesky.analyzePattern(_sparseMatrix);
+        //computeSymbolicDecomposition(A);
       _init = false;
 
       number_t t=get_monotonic_time();
@@ -122,7 +133,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       if (_cholesky.info() != Eigen::Success) { // the matrix is not positive definite
         if (_writeDebug) {
           std::cerr << "Cholesky failure, writing debug.txt (Hessian loadable by Octave)" << std::endl;
-          A.writeOctave("debug.txt");
+          //_sparseMatrix.writeOctave("debug.txt");
         }
         return false;
       }

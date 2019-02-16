@@ -52,6 +52,16 @@ namespace g2o {
       linearSolver->setBlockOrdering(blockorder);
       return g2o::make_unique<BlockSolverPL<p, l>>(std::move(linearSolver));
     }
+
+
+      template<int p, int l, bool blockorder>
+      std::unique_ptr<BlockSolverBase> AllocateSolverPCG()
+      {
+        std::cerr << "# Using EigenSparseCholesky poseDim " << p << " landMarkDim " << l << " blockordering " << blockorder << std::endl;
+        auto linearSolver = g2o::make_unique<LinearSolverEigen<typename BlockSolverPL<p, l>::PoseMatrixType>>();
+        linearSolver->setBlockOrdering(blockorder);
+        return g2o::make_unique<BlockSolverPL<p, l>>(std::move(linearSolver));
+      }
   }
 
   /**
