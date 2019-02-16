@@ -39,6 +39,7 @@
 #include "g2o/solvers/cholmod/linear_solver_cholmod.h"
 #include "g2o/solvers/dense/linear_solver_dense.h"
 #include "g2o/solvers/eigen/linear_solver_eigen.h"
+#include "g2o/solvers/eigen/linear_solver_pcg_eigen.h"
 #include "g2o/solvers/pcg/linear_solver_pcg.h"
 #include "g2o/types/sba/types_six_dof_expmap.h"
 //#include "g2o/math_groups/se3quat.h"
@@ -119,7 +120,7 @@ int main(int argc, const char* argv[]){
 
   int linSolver = 0;
   if (argc>5){
-    linSolver = atoi(argv[5]) != 0;
+    linSolver = atoi(argv[5]);
   }
 
   int numCameras = 15;
@@ -154,7 +155,7 @@ int main(int argc, const char* argv[]){
   } else if(linSolver == 3) {
     linearSolver = g2o::make_unique<g2o::LinearSolverPCG<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   } else {
-    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverPCGEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
   }
 
 
@@ -320,6 +321,7 @@ int main(int argc, const char* argv[]){
     Vector3d diff = v_p->estimate()-true_points[it->second];
     if (inliers.find(it->first)==inliers.end())
       continue;
+
     sum_diff2 += diff.dot(diff);
     ++point_num;
   }
