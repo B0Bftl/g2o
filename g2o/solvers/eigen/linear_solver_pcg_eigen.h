@@ -114,10 +114,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
                int _rowDim, int _colDimCam, int _colDimPoint)
     {
 
-      _sparseMatrix = A;
+      J = A;
 
-      VectorX::MapType xVec(x, _sparseMatrix.cols());
-      VectorX::ConstMapType bVec(b, _sparseMatrix.cols());
+      VectorX::MapType xVec(x, J.cols());
+      VectorX::ConstMapType bVec(b, J.cols());
 
       for (int i = 0; i<_numCams;++i) {
         // Go through all Cameras an compute their R
@@ -126,47 +126,93 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       }
 
       Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
-      qr.analyzePattern(_sparseMatrix);
+      qr.analyzePattern(J);
 
-      qr.factorize(_sparseMatrix);
+      qr.factorize(J);
       Eigen::SparseMatrix<number_t> R = qr.matrixR();
-      // _sparseMatrix is now in EIGEN form, and can be used with its interface
+      // J is now in EIGEN form, and can be used with its interface
 
-      double eta = 0.1;
+      number_t eta = 0.1;
       VectorX::MapType xC(x, _numCams * 6);
       VectorX::MapType xP(x + _numCams * 6, _numPoints * 3);
 
-      Eigen::SparseMatrix<number_t> Jc = _sparseMatrix.leftCols(_numCams * 6);
-      Eigen::SparseMatrix<number_t> Jp = _sparseMatrix.rightCols(_numPoints * 3);
+      Eigen::SparseMatrix<number_t> Jc = J.leftCols(_numCams * 6);
+      Eigen::SparseMatrix<number_t> Jp = J.rightCols(_numPoints * 3);
 
       xC.setZero();
       xP = -Jp.transpose()*bVec;
 
-      VectorX p = (-1) * _sparseMatrix.transpose() * (bVec - (_sparseMatrix * xVec));
+      VectorX p = (-1) * J.transpose() * (bVec - (J * xVec));
+      VectorX r = p;
+
+      Eigen::Ref<VectorX> rC = r.segment(0, _numCams * 6);
+      Eigen::Ref<VectorX> rP = r.segment(_numCams*6, _numPoints * 3);
+
 
       number_t gamma = xVec.dot(xVec);
-      VectorX q = _sparseMatrix * p;
+      VectorX q = J * p;
 
+      number_t err_start_eta = eta * r.dot(r);
+      size_t maxIter = J.rows();
+
+      number_t alpha;
+      number_t beta;
+      number_t gammaNew;
+
+      for (int iteration = 0; iteration<maxIter;++iteration) {
+          //check if error small enough
+          if (r.dot(r)< err_start_eta)
+            break;
+
+          alpha = gamma / (q.dot(q));
+          xVec = xVec + alpha * p;
+          if (iteration % 2) {
+            //odd
+            rC = (-1) * alpha * Jc.transpose() * q;
+            rP.setZero();
+
+          } else {
+            //even
+            rP = (-1) * alpha * Jp.transpose() * q;
+            rC.setZero();
+          }
+          gammaNew = r.dot(r);
+          beta = gammaNew / gamma;
+          gamma = gammaNew;
+          p = r + beta*p;
+          if (iteration % 2) {
+            //odd
+            q = beta * q + Jc*rC;
+          } else {
+            //even
+            q = beta * q + Jp * rP;
+          }
+
+      }
+
+
+
+      /*
       if (_init) // compute the symbolic composition once
-        _cholesky.analyzePattern(_sparseMatrix);
+        _cholesky.analyzePattern(J);
         //computeSymbolicDecomposition(A);
       _init = false;
 
       number_t t=get_monotonic_time();
-      _cholesky.factorize(_sparseMatrix);
+      _cholesky.factorize(J);
       if (_cholesky.info() != Eigen::Success) { // the matrix is not positive definite
         if (_writeDebug) {
           std::cerr << "Cholesky failure, writing debug.txt (Hessian loadable by Octave)" << std::endl;
-          //_sparseMatrix.writeOctave("debug.txt");
+          //J.writeOctave("debug.txt");
         }
         return false;
       }
 
       // Solving the system
-      VectorX::MapType xx(x, _sparseMatrix.cols());
-      VectorX::ConstMapType bb(b, _sparseMatrix.cols());
+      VectorX::MapType xx(x, J.cols());
+      VectorX::ConstMapType bb(b, J.cols());
       xx = _cholesky.solve(bb);
-
+      */
       return true;
     }
 
@@ -182,7 +228,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     bool _init;
     bool _blockOrdering;
     bool _writeDebug;
-    SparseMatrix _sparseMatrix;
+    SparseMatrix J;
     CholeskyDecomposition _cholesky;
 
     /**
@@ -195,7 +241,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     {
       number_t t=get_monotonic_time();
       if (! _blockOrdering) {
-        _cholesky.analyzePattern(_sparseMatrix);
+        _cholesky.analyzePattern(J);
       } else {
         // block ordering with the Eigen Interface
         // This is really ugly currently, as it calls internal functions from Eigen
@@ -239,7 +285,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         }
         assert(scalarIdx == rows && "did not completely fill the permutation matrix");
         // analyze with the scalar permutation
-        _cholesky.analyzePatternWithPermutation(_sparseMatrix, scalarP);
+        _cholesky.analyzePatternWithPermutation(J, scalarP);
 
       }
       G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
@@ -250,7 +296,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     void fillSparseMatrix(const SparseBlockMatrix<MatrixType>& A, bool onlyValues)
     {
       if (onlyValues) {
-        A.fillCCS(_sparseMatrix.valuePtr(), true);
+        A.fillCCS(J.valuePtr(), true);
       } else {
 
         // create from triplet structure
@@ -273,7 +319,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
             }
           }
         }
-        _sparseMatrix.setFromTriplets(triplets.begin(), triplets.end());
+        J.setFromTriplets(triplets.begin(), triplets.end());
 
       }
     }
