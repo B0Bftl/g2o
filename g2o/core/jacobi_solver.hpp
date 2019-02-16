@@ -332,7 +332,7 @@ bool JacobiSolver<Traits>::solve(){
   //cerr << __PRETTY_FUNCTION__ << endl;
   if (! _doSchur){
     number_t t=get_monotonic_time();
-    bool ok = _linearSolver->solve(*_hessian, _x, _b);
+    bool ok = _linearSolver->solve(*_hessian, _x, _b, _numPoses, _numLandmarks,2,6,3);
     G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
       globalStats->timeLinearSolver = get_monotonic_time() - t;

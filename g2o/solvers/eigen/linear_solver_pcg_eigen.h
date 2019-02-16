@@ -29,6 +29,9 @@
 
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
+#include <unsupported/Eigen/SparseExtra>
+#include <Eigen/SparseCore>
+
 
 #include "g2o/core/linear_solver.h"
 #include "g2o/core/batch_stats.h"
@@ -107,21 +110,35 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @param b pointer to array containing values to solve for
      * @return true if solving was successful, false otherwise
      */
-    bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b)
+    bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
+               int _rowDim, int _colDimCam, int _colDimPoint)
     {
-      /*
-      if (_init)
-        _sparseMatrix.resize(A.rows(), A.cols());
-      // put A in EIGEN form, _sparseMatrix.
-      fillSparseMatrix(A, !_init);
-       */
-      //
+
+      _sparseMatrix = A;
+
       VectorX::MapType xVec(x, _sparseMatrix.cols());
       VectorX::ConstMapType bVec(b, _sparseMatrix.cols());
 
-      // _sparseMatrix is now in EIGEN form, and can be used with its interface
-      _sparseMatrix = A;
+      for (int i = 0; i<_numCams;++i) {
+        // Go through all Cameras an compute their R
 
+
+      }
+
+      Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
+      qr.analyzePattern(_sparseMatrix);
+
+      qr.factorize(_sparseMatrix);
+      Eigen::SparseMatrix<number_t> R = qr.matrixR();
+      // _sparseMatrix is now in EIGEN form, and can be used with its interface
+
+      double eta = 0.1;
+      VectorX::MapType xC(x, _numCams * 6);
+      VectorX::MapType xP(x + _numCams * 6, _numPoints * 3);
+
+      Eigen::SparseMatrix<number_t> Jc = _sparseMatrix.leftCols(_numCams * 6);
+      Eigen::SparseMatrix<number_t> Jp = _sparseMatrix.rightCols(_numPoints * 3);
+      
 
       if (_init) // compute the symbolic composition once
         _cholesky.analyzePattern(_sparseMatrix);
@@ -142,11 +159,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xx(x, _sparseMatrix.cols());
       VectorX::ConstMapType bb(b, _sparseMatrix.cols());
       xx = _cholesky.solve(bb);
-      G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
-      if (globalStats) {
-        globalStats->timeNumericDecomposition = get_monotonic_time() - t;
-        globalStats->choleskyNNZ = _cholesky.matrixL().nestedExpression().nonZeros() + _sparseMatrix.cols(); // the elements of D
-      }
 
       return true;
     }
