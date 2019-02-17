@@ -165,14 +165,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
-      Eigen::SparseMatrix<number_t> Jc = J.leftCols(_numCams * _colDimCam);
-      Eigen::SparseMatrix<number_t> Jp = J.rightCols(_numPoints * _colDimPoint);
+      Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
+      Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
       xC.setZero();
       // We do not have r, but rather b. D
       xP = (-1) * Jp.transpose()*errVec;
 
-      VectorX p = (-1) * J.transpose() * (errVec - (J * xVec));
+      VectorX p = (-1) * _precondJ.transpose() * (errVec - (_precondJ * xVec));
       VectorX r = p;
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
@@ -180,7 +180,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
       number_t gamma = xVec.dot(xVec);
-      VectorX q = J * p;
+      VectorX q = _precondJ * p;
 
       number_t err_start_eta = eta * r.dot(r);
       size_t maxIter = J.rows();
