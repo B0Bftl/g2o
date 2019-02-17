@@ -112,30 +112,17 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
                int _rowDim, int _colDimCam, int _colDimPoint)
     {
-
+        // Get Matrix, x and b
       J =  A;
-
       VectorX::MapType xVec(x, J.cols());
-      VectorX::ConstMapType errVec(b, J.rows());
+      VectorX::ConstMapType bVec(b, J.cols());
 
-
+        // Compute Preconditioner R_inv
       Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
-      /*
-	    saveMarket((J), "/home/lukas/Documents/eigenMatrices/j_orig.matx");
-	    saveMarket((Jc_tmp), "/home/lukas/Documents/eigenMatrices/jC_tmp.matx");
-        saveMarket((Jp_tmp), "/home/lukas/Documents/eigenMatrices/jP_tmp.matx");
-		*/
-
-	    Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
+      Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
       Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
-	    /*
-        saveMarket((Rc_inv), "/home/lukas/Documents/eigenMatrices/Rc_inv.matx");
-        saveMarket((Rp_inv), "/home/lukas/Documents/eigenMatrices/Rp_inv.matx");
-	    */
-      //Jc_tmp.resize(0,0);
-      //Jp_tmp.resize(0,0);
 
       Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
       R_inv_tmp.setZero();
@@ -143,109 +130,96 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       R_inv_tmp.bottomRightCorner(Rp_inv.cols(), Rp_inv.cols()) = Rp_inv;
 
       Eigen::SparseMatrix<number_t> R_inv = R_inv_tmp.sparseView();
-		/*
-        saveMarket((R_inv_tmp), "/home/lukas/Documents/eigenMatrices/R_tmp_inv.matx");
-        saveMarket((R_inv), "/home/lukas/Documents/eigenMatrices/R_inv.matx");
-        */
 
-        //R_inv_tmp.resize(0,0);
-
+        // apply Preconditioning with R_inv to J and b
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
+      Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
 
+      // get Jc and Jp from preconditioned J
+      //TODO: Make this a REF or MAP
       Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
-		/*
-        saveMarket((_precondJ), "/home/lukas/Documents/eigenMatrices/j_pre.matx");
-        saveMarket((Jc), "/home/lukas/Documents/eigenMatrices/jC_pre.matx");
-        saveMarket((Jp), "/home/lukas/Documents/eigenMatrices/jP_pre.matx");
-        Eigen::SparseMatrix<number_t> hessian = _precondJ.transpose() * _precondJ;
 
-        saveMarket(hessian,"/home/lukas/Documents/eigenMatrices/hessian_precond.matx");
-
-        */
-      number_t eta = 0.0001;
+      // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
+        // Reference b
+      Eigen::Ref<VectorX> bC = _precond_b.segment(0, _numCams * _colDimCam);
+      Eigen::Ref<VectorX> bP = _precond_b.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
 
+      // Preconditioning is complete.
+      // Initialize Algorithm.
+
+      number_t e_2 = 0;
+      number_t e_1 = 0;
+      // previous x
+      VectorX xC_diff(xC.rows());
+      xC_diff.setZero();
       xC.setZero();
-      // We do not have r, but rather b. D
-      xP = (-1) * Jp.transpose()*errVec;
-		/*
-        std::cout << "xVector Init: " << std::endl;
-        for (int i = 0; i<J.cols();++i) {
-            std::cout << xVec[i] << std::endl;
-        }
-		*/
 
-      VectorX p = _precondJ.transpose() * ((-1) * errVec - (_precondJ * xVec));
-      VectorX r = p;
+      xP = bP;
+      xC.setZero();
+      VectorX r(xVec.rows());
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
       Eigen::Ref<VectorX> rP = r.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
+      rC = bC - (Jc.transpose() * (Jp * xP)); // TODO: sign correct?
 
 
-      number_t gamma = xVec.dot(xVec);
-      VectorX q = _precondJ * p;
 
-      number_t err_start_rC = eta * rC.dot(rC);
-      number_t err_start_rP = eta * rP.dot(rP);
+      // Previous r
+      VectorX r_1(xVec.rows());
+      Eigen::Ref<VectorX> rC_1 = r_1.segment(0, _numCams * _colDimCam);
+      Eigen::Ref<VectorX> rP_1 = r_1.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
 
+      rC_1 = rC;
+      rP_1 = rP;
+
+
+      number_t q = 1;
+      number_t q_1 = 1;
+      number_t eta = 0.01;
 
       size_t maxIter = J.rows();
 
       //maxIter = 200;
+      size_t iteration = 0;
+      bool isEven = false;
 
-      number_t alpha = 0;
-      number_t beta = 0;
-      number_t gammaNew = 0;
-      size_t iteration  = 0;
-      number_t otherErr = 0;
-      bool otherDone = false;
-      for (iteration = 0; iteration < maxIter; ++iteration) {
-          //check if error small enough
-          //std::cout << "errC " << rC.dot(rC) << " start " <<  err_start_rC << std::endl;
-          //std::cout << "errP " << rP.dot(rP) << " start " <<  err_start_rP << std::endl;
+      // compute Initial error
 
-          if (iteration % 2) {
-            otherDone = otherErr < err_start_rC;
-          } else {
-            otherDone = otherErr < err_start_rP;
-          }
+      number_t scaledInitialError = eta * rC.dot(rC) + bP.dot(bP);
 
+      for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
+        isEven = iteration % 2;
+        if(isEven && (r.dot(r) + r_1.dot(r_1)) < scaledInitialError )
+        	break;
 
-          if (rC.dot(rC) < err_start_rC && rP.dot(rP) < err_start_rP && otherDone)
-          {
-              break;
-          }
+        q_1 = q;
+        q = 1 - e_1;
+        if (!isEven) {
+            // odd
+            rP = (1/q) * ( (Jp.transpose()  * (Jc* rC)) - (e_1 * rP_1) );
+	        rP_1 = rP;
+	        rC.setZero();
+        } else {
+            // even
+            rC = (1/q) * ( (Jc.transpose() * (Jp * rP)) - (e_1 * rC_1 ));
+	        rP.setZero();
+        }
+        e_2 = e_1;
+        e_1 = q *( r.dot(r) / r_1.dot(r_1));
 
-          alpha = gamma / (q.dot(q));
-          xVec = xVec + alpha * p;
-          if (iteration % 2) {
-            //odd
-            rC = (-1) * alpha * Jc.transpose() * q;
-            otherErr = rP.dot(rP);
-            rP.setZero();
-
-          } else {
+        if(isEven) {
             //even
-            rP = (-1) * alpha * Jp.transpose() * q;
-            otherErr = rC.dot(rC);
-            rC.setZero();
-          }
-          gammaNew = r.dot(r);
-          beta = gammaNew / gamma;
-          gamma = gammaNew;
-          p = r + beta*p;
-          if (iteration % 2) {
-            //odd
-            q = beta * q + Jc * rC;
-          } else {
-            //even
-            q = beta * q + Jp * rP;
-          }
+            xC_diff = (1/(q * q_1)) * (rC_1 + (e_1 * e_2 * xC_diff)); //TODO: rC_1 okay? oder verschieben?
+	        rC_1 = rC;
+	        xC = xC_diff + xC;
+        }
 
       }
 
+      xP = bP - (Jp.transpose() * (Jc * xC)) - rP;
       //retrieve xC, xP
 
       /*
@@ -258,7 +232,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       //Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
 	    Eigen::VectorXd approx =  _precondJ.transpose() * _precondJ * xVec;
 
-      Eigen::VectorXd res = approx - ((-1) * R_inv.transpose() * J.transpose() * errVec);
+      Eigen::VectorXd res = approx - ((-1) * R_inv.transpose() * bVec);
 
       number_t resAbs = res.dot(res);
 

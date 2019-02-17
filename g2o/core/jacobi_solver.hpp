@@ -325,8 +325,10 @@ bool JacobiSolver<Traits>::solve(){
   //cerr << __PRETTY_FUNCTION__ << endl;
   if (! _doSchur){
     number_t t=get_monotonic_time();
-    bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
-    G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
+    //bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
+	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3);
+
+	  G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
       globalStats->timeLinearSolver = get_monotonic_time() - t;
       globalStats->hessianDimension = globalStats->hessianPoseDimension = _Hpp->cols();
