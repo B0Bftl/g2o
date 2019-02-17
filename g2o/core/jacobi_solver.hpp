@@ -67,10 +67,7 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
     _coefficients.reset(allocate_aligned<number_t>(s));
     _bschur.reset(allocate_aligned<number_t>(_sizePoses));
   }
-  _JacobiC = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
-  _JacobiP = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
   _jacobiFull = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
-  _hessian = g2o::make_unique<Eigen::SparseMatrix<number_t>>(0,0);
 
   _Hpp= g2o::make_unique<PoseHessianType>(blockPoseIndices, blockPoseIndices, numPoseBlocks, numPoseBlocks);
   _Hll = g2o::make_unique<LandmarkHessianType>(blockLandmarkIndices, blockLandmarkIndices, numLandmarkBlocks, numLandmarkBlocks);
@@ -90,14 +87,10 @@ void JacobiSolver<Traits>::resize(int* blockPoseIndices, int numPoseBlocks,
 template <typename Traits>
 void JacobiSolver<Traits>::deallocate()
 {
-  if (_hessian)
-    _hessian->resize(0,0);
+
   if(_jacobiFull)
     _jacobiFull->resize(0,0);
-  if(_JacobiP)
-    _JacobiP->resize(0,0);
-  if(_JacobiC)
-    _JacobiC->resize(0,0);
+  _scaleCoeff.clear();
 
   _Hpp.reset();
     _Hll.reset();
@@ -332,7 +325,7 @@ bool JacobiSolver<Traits>::solve(){
   //cerr << __PRETTY_FUNCTION__ << endl;
   if (! _doSchur){
     number_t t=get_monotonic_time();
-    bool ok = _linearSolver->solve(*_hessian, _x, _b, _numPoses, _numLandmarks,2,6,3);
+    bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
     G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
       globalStats->timeLinearSolver = get_monotonic_time() - t;
@@ -487,8 +480,9 @@ bool JacobiSolver<Traits>::buildSystem()
     assert(v);
     v->clearQuadraticForm();
   }
+  _jacobiFull->resize(0,0);
+  _scaleCoeff.clear();
   _Hpp->clear();
-  //TODO: Clear Jacobi
   //if (_doSchur) {
     _Hll->clear();
     _Hpl->clear();
@@ -504,13 +498,13 @@ bool JacobiSolver<Traits>::buildSystem()
   JacobianWorkspace jacobianWorkspace = _optimizer->jacobianWorkspace();
 # pragma omp parallel for default (shared) firstprivate(jacobianWorkspace) if (_optimizer->activeEdges().size() > 100)
 # endif
-  std::vector<Eigen::Triplet<number_t>> jacobiDataP;
-  std::vector<Eigen::Triplet<number_t>> jacobiDataC;
+  std::vector<Eigen::Triplet<number_t>> jacobiData;
 
   //TODO: Find correct values here
   int sizeEdges = static_cast<int>(_optimizer->activeEdges().size());
-  jacobiDataP.reserve(sizeEdges * 6);
-  jacobiDataC.reserve(sizeEdges * 12);
+  jacobiData.reserve(sizeEdges * 6 + sizeEdges * 12 + _numLandmarks + _numPoses);
+  _errVector.reserve(_numLandmarks * 3 + _numPoses * 6 + 2*sizeEdges);
+
 
   int rowsP = 2;
   int colsP = 3;
@@ -555,7 +549,10 @@ bool JacobiSolver<Traits>::buildSystem()
       e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
       e->constructQuadraticForm();
 
-      //if(vi->fixed() || vj->fixed()) continue;
+      _errVector.emplace_back(e->errorData()[0]);
+      _errVector.emplace_back(e->errorData()[1]);
+
+              //if(vi->fixed() || vj->fixed()) continue;
       ++rowCount;
       // We only
 
@@ -566,28 +563,28 @@ bool JacobiSolver<Traits>::buildSystem()
           // We know that we are sorted
           offsetRow = rowCount * rowsP;
           offsetCol = ((_numPoses) * colsC) + ((vi->hessianIndex() - _numPoses) * colsP);
-          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-          jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-          jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
         } else {
           // Camera
           offsetRow = rowCount * rowsC;
           offsetCol = (vi->hessianIndex()) * colsC;
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-          jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-          jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
         }
       }
 
@@ -599,28 +596,28 @@ bool JacobiSolver<Traits>::buildSystem()
           // We know that we are sorted
             offsetRow = rowCount * rowsP;
             offsetCol = ((_numPoses) * colsC) + ((vj->hessianIndex() - _numPoses) * colsP);
-            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-            jacobiDataP.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-            jacobiDataP.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
         } else {
           // Camera
             offsetRow = rowCount * rowsC;
             offsetCol = (vj->hessianIndex()) * colsC;
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-            jacobiDataC.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-            jacobiDataC.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
         }
       }
 
@@ -652,8 +649,8 @@ bool JacobiSolver<Traits>::buildSystem()
   int rowDim = (rowCount + 1) * 2;
 
   /*
-  std::cout << "P" << std::endl;
-  for(auto const& t : jacobiDataP) {
+  std::cout << "jacobi" << std::endl;
+  for(auto const& t : jacobiData) {
     std::cout << t.row() << "," << t.col() << ":" << std::endl;
    }
 
@@ -662,17 +659,21 @@ bool JacobiSolver<Traits>::buildSystem()
     std::cout << t.row() << "," << t.col() << ":" << std::endl;
   }
   */
-  _JacobiP->resize(rowDim, dimCam + dimPoints);
-  _JacobiP->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
-  _JacobiC->resize(rowDim, dimCam);
-  _JacobiC->setFromTriplets(jacobiDataC.begin(), jacobiDataC.end());
-  std::move(jacobiDataC.begin(), jacobiDataC.end(), std::back_inserter(jacobiDataP));
 
-  _jacobiFull->resize(rowDim, dimCam + dimPoints);
-  _jacobiFull->setFromTriplets(jacobiDataP.begin(), jacobiDataP.end());
+  // Additionally allocate Identity below jacobi for lm lambda scaling.
+  _jacobiFull->resize(rowDim + dimCam + dimPoints, dimCam + dimPoints);
+  for (int i = 0; i < dimCam + dimPoints; ++i) {
+  	jacobiData.emplace_back(rowDim + i,i,1);
+    _errVector.emplace_back(0);
+  }
 
-  _hessian->resize(dimCam + dimPoints, dimCam + dimPoints);
-  (*_hessian) = (*_jacobiFull).transpose() * (*_jacobiFull);
+  _jacobiFull->setFromTriplets(jacobiData.begin(), jacobiData.end());
+
+  // we need to scale jacobis every Step. To increase speed, we save pointers to scale entries once for o(1) access-
+  _scaleCoeff.reserve(dimCam + dimPoints);
+  for (int i = 0; i < dimCam + dimPoints; ++i) {
+    _scaleCoeff.emplace_back(_jacobiFull->coeffRef(rowDim + i,i));
+  }
 
   for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size()); ++i) {
     OptimizableGraph::Vertex* v=_optimizer->indexMapping()[i];
@@ -695,24 +696,16 @@ bool JacobiSolver<Traits>::buildSystem()
 template <typename Traits>
 bool JacobiSolver<Traits>::setLambda(number_t lambda, bool backup)
 {
-  if (backup) {
-    _diagonalHessian.reserve(_numPoses + _numLandmarks);
-    //_diagonalBackupPose.resize(_numPoses + _numLandmarks);
-    //_diagonalBackupLandmark.resize(_numLandmarks);
-    for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
-      _diagonalHessian[i] = _hessian->coeff(i,i);
-    }
-  }
-
-  for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
-    number_t& ref = _hessian->coeffRef(i,i);
-    _diagonalHessian[i] = ref;
-    ref += lambda;
-  }
-
+    (void) backup;
+    number_t lambdaRoot = sqrt(lambda);
 # ifdef G2O_OPENMP
-# pragma omp parallel for default (shared) if (_numPoses > 100)
+# pragma omp parallel for default (shared) if (_scaleCoeff.size() > 100)
 # endif
+    for (size_t i = 0; i < _scaleCoeff.size(); ++i) {
+      _scaleCoeff[i].get() = lambdaRoot;
+    }
+
+
   /*
   for (int i = 0; i < _numPoses; ++i) {
     PoseMatrixType *b=_Hpp->block(i,i);
@@ -739,9 +732,11 @@ void JacobiSolver<Traits>::restoreDiagonal()
 {
   //assert((int) _diagonalBackupPose.size() == _numPoses && "Mismatch in dimensions");
   //assert((int) _diagonalBackupLandmark.size() == _numLandmarks && "Mismatch in dimensions");
-
-  for (int i = 0; i < _numPoses + _numLandmarks; ++i) {
-    _hessian->coeffRef(i,i) = _diagonalHessian[i];
+# ifdef G2O_OPENMP
+# pragma omp parallel for default (shared) if (_scaleCoeff.size() > 100)
+# endif
+  for (size_t i = 0; i < _scaleCoeff.size(); ++i) {
+    _scaleCoeff[i].get() = 1;
   }
   /*
   for (int i = 0; i < _numPoses; ++i) {
@@ -766,14 +761,9 @@ bool JacobiSolver<Traits>::init(SparseOptimizer* optimizer, bool online)
       _Hpl->clear();
     if (_Hll)
       _Hll->clear();
-    if (_hessian)
-      _hessian->resize(0,0);
     if(_jacobiFull)
       _jacobiFull->resize(0,0);
-    if(_JacobiP)
-      _JacobiP->resize(0,0);
-    if(_JacobiC)
-      _JacobiC->resize(0,0);
+    _scaleCoeff.clear();
 
 
   }

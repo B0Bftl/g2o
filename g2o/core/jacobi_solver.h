@@ -140,10 +140,9 @@ namespace g2o {
 
       void deallocate();
 
-      std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiC;
-      std::unique_ptr<Eigen::SparseMatrix<number_t>> _JacobiP;
+      std::vector<number_t> _errVector;
+      std::vector<std::reference_wrapper<number_t>> _scaleCoeff;
 	  std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
-      std::unique_ptr<Eigen::SparseMatrix<number_t>> _hessian;
 
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
@@ -157,7 +156,6 @@ namespace g2o {
 
       std::unique_ptr<LinearSolverType> _linearSolver;
 
-      std::vector<number_t> _diagonalHessian;
       std::vector<PoseVectorType, Eigen::aligned_allocator<PoseVectorType> > _diagonalBackupPose;
       std::vector<LandmarkVectorType, Eigen::aligned_allocator<LandmarkVectorType> > _diagonalBackupLandmark;
 
