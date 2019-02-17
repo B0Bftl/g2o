@@ -102,7 +102,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       return false;
     }
 
-
     /**
      * Solve System Ax = b for x
      * @param Reference to A, sparseBlockMatrix in g2o form, system matrix of linear system
@@ -111,68 +110,46 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @return true if solving was successful, false otherwise
      */
     bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-               int _rowDim, int _colDimCam, int _colDimPoint)
+               int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda)
     {
 
-      J = A;
+      J = (1/(_lambda*_lambda)) * A;
 
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType errVec(b, J.rows());
 
-      for (int i = 0; i<_numCams;++i) {
-        // Go through all Cameras an compute their R
 
+      Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
+      Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
-      }
+      Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
+      Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
 
-      Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
-      qr.analyzePattern(J);
+      Jc_tmp.resize(0,0);
+      Jp_tmp.resize(0,0);
 
-      qr.factorize(J);
+      Eigen::MatrixXd R_inv_tmp(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
+      R_inv_tmp.topLeftCorner(Rc_inv.cols(), Rc_inv.cols()) = Rc_inv;
+      R_inv_tmp.bottomRightCorner(Rp_inv.cols(), Rp_inv.cols()) = Rp_inv;
 
+      Eigen::SparseMatrix<number_t> R_inv = R_inv_tmp.sparseView();
 
-      Eigen::SparseMatrix<number_t, Eigen::RowMajor> R = qr.matrixR();
-      // J is now in EIGEN form, and can be used with its interface
+      R_inv_tmp.resize(0,0);
 
-        Eigen::Ref<Eigen::SparseMatrix<number_t, Eigen::RowMajor>> R_square = R.topRows(R.cols());
-        Eigen::MatrixXd R_square_dense = Eigen::MatrixXd(R_square);
-        Eigen::MatrixXd R_sq_dense_inv = R_square_dense.inverse();
-
-        Eigen::SparseMatrix<number_t, Eigen::RowMajor> R_sq_inv_sparse = R_sq_dense_inv.sparseView();
-        R_square = R_sq_inv_sparse;
-
-        /*
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<number_t, Eigen::RowMajor>, Eigen::UpLoType::Upper> cholSolver;
-        cholSolver.compute(R_square);
-        if(cholSolver.info()!=Eigen::Success) {
-            // decomposition failed
-            return false;
-        }
-        Eigen::SparseMatrix<number_t> identity(R.cols(), R.cols());
-        identity.setIdentity();
-
-        Eigen::SparseMatrix<number_t, Eigen::RowMajor> R_sq_inv = cholSolver.solve(identity);
-
-        if(cholSolver.info()!=Eigen::Success) {
-            // decomposition failed
-            return false;
-        }
-        */
-        Eigen::SparseMatrix<number_t> _precondJ = J * R_sq_inv_sparse;
-
-
-        number_t eta = 0.1;
-      VectorX::MapType xC(x, _numCams * _colDimCam);
-      VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
+      Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
 
       Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
+
+      number_t eta = 0.1;
+      VectorX::MapType xC(x, _numCams * _colDimCam);
+      VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
       xC.setZero();
       // We do not have r, but rather b. D
       xP = (-1) * Jp.transpose()*errVec;
 
-      VectorX p = (-1) * _precondJ.transpose() * (errVec - (_precondJ * xVec));
+      VectorX p = _precondJ.transpose() * ((-1) * errVec - (_precondJ * xVec));
       VectorX r = p;
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
@@ -182,28 +159,48 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       number_t gamma = xVec.dot(xVec);
       VectorX q = _precondJ * p;
 
-      number_t err_start_eta = eta * r.dot(r);
+      number_t err_start_rC = eta * rC.dot(rC);
+      number_t err_start_rP = eta * rP.dot(rP);
+
+
       size_t maxIter = J.rows();
 
+      maxIter = 3;
       number_t alpha;
       number_t beta;
       number_t gammaNew;
-
-      for (size_t iteration = 0; iteration < maxIter;++iteration) {
+      size_t iteration;
+      number_t otherErr;
+      bool otherDone;
+      for (iteration = 0; iteration < maxIter;++iteration) {
           //check if error small enough
-          if (r.dot(r)< err_start_eta)
-            break;
+          std::cout << "errC " << rC.dot(rC) << " start " <<  err_start_rC << std::endl;
+          std::cout << "errP " << rP.dot(rP) << " start " <<  err_start_rP << std::endl;
 
+          if (iteration % 2) {
+            otherDone = otherErr < err_start_rC;
+          } else {
+            otherDone = otherErr < err_start_rP;
+          }
+
+          /*
+          if (rC.dot(rC) < err_start_rC && rP.dot(rP) < err_start_rP && otherDone)
+          {
+              break;
+          }
+            */
           alpha = gamma / (q.dot(q));
           xVec = xVec + alpha * p;
           if (iteration % 2) {
             //odd
             rC = (-1) * alpha * Jc.transpose() * q;
+            otherErr = rP.dot(rP);
             rP.setZero();
 
           } else {
             //even
             rP = (-1) * alpha * Jp.transpose() * q;
+            otherErr = rC.dot(rC);
             rC.setZero();
           }
           gammaNew = r.dot(r);
@@ -212,7 +209,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
           p = r + beta*p;
           if (iteration % 2) {
             //odd
-            q = beta * q + Jc*rC;
+            q = beta * q + Jc * rC;
           } else {
             //even
             q = beta * q + Jp * rP;
@@ -220,29 +217,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       }
 
+      std::cout << iteration << std::endl;
+
+      Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
+
+      Eigen::VectorXd res = approx - ((-1) * R_inv.transpose() * J.transpose() * errVec);
+
+      number_t resAbs = res.dot(res);
+
+      std::cout << "Residual: " << resAbs << std::endl;
 
 
-      /*
-      if (_init) // compute the symbolic composition once
-        _cholesky.analyzePattern(J);
-        //computeSymbolicDecomposition(A);
-      _init = false;
+      xVec = R_inv * xVec;
 
-      number_t t=get_monotonic_time();
-      _cholesky.factorize(J);
-      if (_cholesky.info() != Eigen::Success) { // the matrix is not positive definite
-        if (_writeDebug) {
-          std::cerr << "Cholesky failure, writing debug.txt (Hessian loadable by Octave)" << std::endl;
-          //J.writeOctave("debug.txt");
-        }
-        return false;
-      }
 
-      // Solving the system
-      VectorX::MapType xx(x, J.cols());
-      VectorX::ConstMapType bb(b, J.cols());
-      xx = _cholesky.solve(bb);
-      */
+
       return true;
     }
 
@@ -260,6 +249,30 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     bool _writeDebug;
     SparseMatrix J;
     CholeskyDecomposition _cholesky;
+
+    template <typename Derived>
+    Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix) {
+
+        Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
+
+        qr.analyzePattern(matrix);
+        qr.factorize(matrix);
+
+        Eigen::SparseMatrix<number_t, Eigen::RowMajor> tmp = qr.matrixR();
+        Eigen::SparseMatrix<number_t, Eigen::ColMajor> R = tmp.topRows(tmp.cols());
+
+        Eigen::SparseLU<Eigen::SparseMatrix<number_t>> lu;
+        lu.analyzePattern(R);
+        lu.factorize(R);
+
+        Eigen::SparseMatrix<number_t> I(R.cols(), R.cols());
+        I.setIdentity();
+
+        Eigen::SparseMatrix<number_t> R_inv =  lu.solve(I);
+
+        return R_inv;
+    }
+
 
     /**
      * compute the symbolic decompostion of the matrix only once.

@@ -62,7 +62,7 @@ class LinearSolver
      * solve caller with Eigen Matrix definition. Returns false if not defined
      */
     virtual bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-                       int _rowDim, int _colDimCam, int _colDimPoint) {
+                       int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda) {
         (void) A;
         (void) x;
         (void) b;
@@ -71,6 +71,7 @@ class LinearSolver
         (void) _rowDim;
         (void) _colDimCam;
         (void) _colDimPoint;
+        (void) _lambda;
         std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
         return false;
     }
