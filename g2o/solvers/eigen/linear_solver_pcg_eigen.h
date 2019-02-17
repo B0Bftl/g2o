@@ -122,29 +122,31 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
+      /*
 	    saveMarket((J), "/home/lukas/Documents/eigenMatrices/j_orig.matx");
 	    saveMarket((Jc_tmp), "/home/lukas/Documents/eigenMatrices/jC_tmp.matx");
         saveMarket((Jp_tmp), "/home/lukas/Documents/eigenMatrices/jP_tmp.matx");
-
+		*/
 
 	    Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
       Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
-
+	    /*
         saveMarket((Rc_inv), "/home/lukas/Documents/eigenMatrices/Rc_inv.matx");
         saveMarket((Rp_inv), "/home/lukas/Documents/eigenMatrices/Rp_inv.matx");
-
+	    */
       //Jc_tmp.resize(0,0);
       //Jp_tmp.resize(0,0);
 
-      Eigen::MatrixXd R_inv_tmp(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
+      Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
+      R_inv_tmp.setZero();
       R_inv_tmp.topLeftCorner(Rc_inv.cols(), Rc_inv.cols()) = Rc_inv;
       R_inv_tmp.bottomRightCorner(Rp_inv.cols(), Rp_inv.cols()) = Rp_inv;
 
       Eigen::SparseMatrix<number_t> R_inv = R_inv_tmp.sparseView();
-
+		/*
         saveMarket((R_inv_tmp), "/home/lukas/Documents/eigenMatrices/R_tmp_inv.matx");
         saveMarket((R_inv), "/home/lukas/Documents/eigenMatrices/R_inv.matx");
-
+        */
 
         //R_inv_tmp.resize(0,0);
 
@@ -152,26 +154,28 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
-
+		/*
         saveMarket((_precondJ), "/home/lukas/Documents/eigenMatrices/j_pre.matx");
         saveMarket((Jc), "/home/lukas/Documents/eigenMatrices/jC_pre.matx");
         saveMarket((Jp), "/home/lukas/Documents/eigenMatrices/jP_pre.matx");
         Eigen::SparseMatrix<number_t> hessian = _precondJ.transpose() * _precondJ;
 
         saveMarket(hessian,"/home/lukas/Documents/eigenMatrices/hessian_precond.matx");
-      number_t eta = 0.1;
+
+        */
+      number_t eta = 0.0001;
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
       xC.setZero();
       // We do not have r, but rather b. D
       xP = (-1) * Jp.transpose()*errVec;
-
+		/*
         std::cout << "xVector Init: " << std::endl;
         for (int i = 0; i<J.cols();++i) {
             std::cout << xVec[i] << std::endl;
         }
-
+		*/
 
       VectorX p = _precondJ.transpose() * ((-1) * errVec - (_precondJ * xVec));
       VectorX r = p;
@@ -189,17 +193,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       size_t maxIter = J.rows();
 
-      maxIter = 3;
-      number_t alpha;
-      number_t beta;
-      number_t gammaNew;
-      size_t iteration;
-      number_t otherErr;
-      bool otherDone;
-      for (iteration = 0; iteration < maxIter;++iteration) {
+      //maxIter = 200;
+
+      number_t alpha = 0;
+      number_t beta = 0;
+      number_t gammaNew = 0;
+      size_t iteration  = 0;
+      number_t otherErr = 0;
+      bool otherDone = false;
+      for (iteration = 0; iteration < maxIter; ++iteration) {
           //check if error small enough
-          std::cout << "errC " << rC.dot(rC) << " start " <<  err_start_rC << std::endl;
-          std::cout << "errP " << rP.dot(rP) << " start " <<  err_start_rP << std::endl;
+          //std::cout << "errC " << rC.dot(rC) << " start " <<  err_start_rC << std::endl;
+          //std::cout << "errP " << rP.dot(rP) << " start " <<  err_start_rP << std::endl;
 
           if (iteration % 2) {
             otherDone = otherErr < err_start_rC;
@@ -207,12 +212,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
             otherDone = otherErr < err_start_rP;
           }
 
-          /*
+
           if (rC.dot(rC) < err_start_rC && rP.dot(rP) < err_start_rP && otherDone)
           {
               break;
           }
-            */
+
           alpha = gamma / (q.dot(q));
           xVec = xVec + alpha * p;
           if (iteration % 2) {
@@ -243,14 +248,15 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       //retrieve xC, xP
 
-
+      /*
       std::cout << "iter: " << iteration << std::endl;
         std::cout << "xVector: " << std::endl;
       for (int i = 0; i<J.cols();++i) {
           std::cout << xVec[i] << std::endl;
       }
-
-      Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
+		*/
+      //Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
+	    Eigen::VectorXd approx =  _precondJ.transpose() * _precondJ * xVec;
 
       Eigen::VectorXd res = approx - ((-1) * R_inv.transpose() * J.transpose() * errVec);
 
