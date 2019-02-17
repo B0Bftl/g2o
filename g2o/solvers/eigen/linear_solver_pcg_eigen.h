@@ -121,10 +121,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
+      std::cout <<" computing Qr" << std::endl;
       Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
       Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
+        std::cout << "computing done" << std::endl;
 
-      Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
+	    Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
       R_inv_tmp.setZero();
       R_inv_tmp.topLeftCorner(Rc_inv.cols(), Rc_inv.cols()) = Rc_inv;
       R_inv_tmp.bottomRightCorner(Rp_inv.cols(), Rp_inv.cols()) = Rp_inv;
