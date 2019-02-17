@@ -110,10 +110,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @return true if solving was successful, false otherwise
      */
     bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-               int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda)
+               int _rowDim, int _colDimCam, int _colDimPoint)
     {
 
-      J = (1/(_lambda*_lambda)) * A;
+      J =  A;
 
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType errVec(b, J.rows());
@@ -122,11 +122,19 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
-      Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
+	    saveMarket((J), "/home/lukas/Documents/eigenMatrices/j_orig.matx");
+	    saveMarket((Jc_tmp), "/home/lukas/Documents/eigenMatrices/jC_tmp.matx");
+        saveMarket((Jp_tmp), "/home/lukas/Documents/eigenMatrices/jP_tmp.matx");
+
+
+	    Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
       Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
 
-      Jc_tmp.resize(0,0);
-      Jp_tmp.resize(0,0);
+        saveMarket((Rc_inv), "/home/lukas/Documents/eigenMatrices/Rc_inv.matx");
+        saveMarket((Rp_inv), "/home/lukas/Documents/eigenMatrices/Rp_inv.matx");
+
+      //Jc_tmp.resize(0,0);
+      //Jp_tmp.resize(0,0);
 
       Eigen::MatrixXd R_inv_tmp(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
       R_inv_tmp.topLeftCorner(Rc_inv.cols(), Rc_inv.cols()) = Rc_inv;
@@ -134,13 +142,23 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::SparseMatrix<number_t> R_inv = R_inv_tmp.sparseView();
 
-      R_inv_tmp.resize(0,0);
+        saveMarket((R_inv_tmp), "/home/lukas/Documents/eigenMatrices/R_tmp_inv.matx");
+        saveMarket((R_inv), "/home/lukas/Documents/eigenMatrices/R_inv.matx");
+
+
+        //R_inv_tmp.resize(0,0);
 
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
 
       Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
+        saveMarket((_precondJ), "/home/lukas/Documents/eigenMatrices/j_pre.matx");
+        saveMarket((Jc), "/home/lukas/Documents/eigenMatrices/jC_pre.matx");
+        saveMarket((Jp), "/home/lukas/Documents/eigenMatrices/jP_pre.matx");
+        Eigen::SparseMatrix<number_t> hessian = _precondJ.transpose() * _precondJ;
+
+        saveMarket(hessian,"/home/lukas/Documents/eigenMatrices/hessian_precond.matx");
       number_t eta = 0.1;
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
@@ -148,6 +166,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xC.setZero();
       // We do not have r, but rather b. D
       xP = (-1) * Jp.transpose()*errVec;
+
+        std::cout << "xVector Init: " << std::endl;
+        for (int i = 0; i<J.cols();++i) {
+            std::cout << xVec[i] << std::endl;
+        }
+
 
       VectorX p = _precondJ.transpose() * ((-1) * errVec - (_precondJ * xVec));
       VectorX r = p;
@@ -217,7 +241,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       }
 
-      std::cout << iteration << std::endl;
+      //retrieve xC, xP
+
+
+      std::cout << "iter: " << iteration << std::endl;
+        std::cout << "xVector: " << std::endl;
+      for (int i = 0; i<J.cols();++i) {
+          std::cout << xVec[i] << std::endl;
+      }
 
       Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
 
@@ -258,12 +289,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         qr.analyzePattern(matrix);
         qr.factorize(matrix);
 
+        if(qr.info() != Eigen::Success)
+            std::cout << "QR Decomposition failed." << std::endl;
+
         Eigen::SparseMatrix<number_t, Eigen::RowMajor> tmp = qr.matrixR();
         Eigen::SparseMatrix<number_t, Eigen::ColMajor> R = tmp.topRows(tmp.cols());
 
         Eigen::SparseLU<Eigen::SparseMatrix<number_t>> lu;
         lu.analyzePattern(R);
         lu.factorize(R);
+
+        if(lu.info() != Eigen::Success)
+            std::cout << "LU Decomposition failed." << std::endl;
 
         Eigen::SparseMatrix<number_t> I(R.cols(), R.cols());
         I.setIdentity();

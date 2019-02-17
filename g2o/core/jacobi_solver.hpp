@@ -651,8 +651,8 @@ bool JacobiSolver<Traits>::buildSystem()
   /*
   std::cout << "jacobi" << std::endl;
   for(auto const& t : jacobiData) {
-    std::cout << t.row() << "," << t.col() << ":" << std::endl;
-   }
+    std::cout << t.row() << "," << t.col() << ":" << t.value() << std::endl;
+  }
 
   std::cout << std::endl << "C" << std::endl;
   for(auto const& t : jacobiDataC) {
@@ -666,7 +666,12 @@ bool JacobiSolver<Traits>::buildSystem()
   	jacobiData.emplace_back(rowDim + i,i,1);
     _errVector.emplace_back(0);
   }
-
+  /*
+  std::cout << "jacobi" << std::endl;
+  for(auto const& t : jacobiData) {
+    std::cout << t.row() << "," << t.col() << ":" << t.value() << std::endl;
+  }
+  */
   _jacobiFull->setFromTriplets(jacobiData.begin(), jacobiData.end());
 
   // we need to scale jacobis every Step. To increase speed, we save pointers to scale entries once for o(1) access-
