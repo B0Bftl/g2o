@@ -110,8 +110,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @return true if solving was successful, false otherwise
      */
     bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-               int _rowDim, int _colDimCam, int _colDimPoint)
+               int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer)
     {
+
+	    testing();
+
+      _optimizer = optimizer;
         // Get Matrix, x and b
       J =  A;
       VectorX::MapType xVec(x, J.cols());
@@ -122,9 +126,27 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
       std::cout <<" computing Qr" << std::endl;
-      Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp);
-      Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp);
+
+
+      Eigen::SparseMatrix<number_t> Rc_inv  = computeRc_inverse(Jc_tmp, _colDimCam);
+      Eigen::SparseMatrix<number_t> Rp_inv2 = computeRp_inverse(Jp_tmp, _colDimPoint, _numCams);
+
+      //Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp, 0, _numCams, _colDimCam);
+      Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp, _numCams, -1, _colDimPoint);
         std::cout << "computing done" << std::endl;
+
+        //TODO: DEBUG
+
+        std::cout << "Matching Size: " << Rp_inv2.cols() << " " << Rp_inv.cols() << "x"<< Rp_inv2.rows() << " " << Rp_inv.rows() << std::endl;
+
+        std::cout << "coeff: " << std::endl;
+
+        for (int j = 0; j < Rp_inv.cols(); ++j) {
+        	for (int k = 0; k < Rp_inv.rows(); ++k) {
+				std::cout << k << "x" << j << ": " << Rp_inv.coeff(k,j) << " - " << Rp_inv2.coeff(k,j) << std::endl;
+        	}
+        }
+
 
 	    Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
       R_inv_tmp.setZero();
@@ -260,13 +282,99 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     bool _init;
     bool _blockOrdering;
     bool _writeDebug;
+    SparseOptimizer* _optimizer;
     SparseMatrix J;
     CholeskyDecomposition _cholesky;
 
-    template <typename Derived>
-    Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix) {
+    void testing () {
+    	std::cout << "testing" << std::endl;
 
-        Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
+    	std::vector<Eigen::Triplet<number_t>> T;
+
+    	T.emplace_back(0,0,3);
+	    T.emplace_back(0,1,5);
+	    T.emplace_back(1,0,2);
+	    T.emplace_back(1,1,3);
+	    T.emplace_back(2,2,4);
+	    T.emplace_back(2,3,2);
+	    T.emplace_back(3,2,1);
+	    T.emplace_back(3,3,1);
+
+	    Eigen::SparseMatrix<number_t> mat (4,4);
+
+	    mat.setFromTriplets(T.begin(), T.end());
+
+	    Eigen::SparseMatrix<number_t> R1 = computeRp_inverse(mat,2,0);
+	    Eigen::SparseMatrix<number_t> R2 = computeR_inverse(mat,0,0,0);
+
+	    std::cout << "Matching Size: " << R1.cols() << " " << R2.cols() << "x"<< R1.rows() << " " << R2.rows() << std::endl;
+
+	    std::cout << "coeff: " << std::endl;
+
+	    for (int j = 0; j < R1.cols(); ++j) {
+		    for (int k = 0; k < R1.rows(); ++k) {
+			    std::cout << k << "x" << j << ": " << R1.coeff(k,j) << " | " << R2.coeff(k,j) << std::endl;
+		    }
+	    }
+
+
+    }
+
+    template <typename Derived>
+    Eigen::SparseMatrix<number_t> computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim) {
+
+        for (int i = 0; i < _optimizer->indexMapping().size(); ++i) {
+            const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i]);
+
+            std::cout << "block: 2 x " << matrix.rows() << " starting at: 0 " <<  i * 2 << std::endl ;
+
+        }
+
+        return Eigen::SparseMatrix<number_t>(0,0);
+
+    }
+
+    template <typename Derived>
+    Eigen::SparseMatrix<number_t> computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams) {
+
+    	int rowOffset = 0;
+        std::vector<Eigen::Triplet<number_t >> coeffR;
+
+	    for (int i = 0; i < 2; ++i) {
+
+	    //for (int i = 0; i < _optimizer->indexMapping().size() - numCams; ++i) {
+            const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
+		    int offs = v->activeEdgeCount;
+		    offs = 2;
+
+	        Eigen::MatrixXd block(offs * 2 + colDim, colDim);
+	        block.topRows(offs * 2) = matrix.block(rowOffset, i * colDim, offs * 2, colDim);
+			block.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * 2;
+            Eigen::ColPivHouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(block);
+            qr.compute(block);
+	        Eigen::MatrixXd inv = qr.matrixR().topRows(qr.matrixR().cols());
+
+			inv = inv.inverse();
+
+	        for (int j = 0; j < inv.cols(); ++j) {
+		        for (int k = 0; k < inv.rows(); ++k) {
+			        coeffR.emplace_back(j+1 + i*2,k+1 + i*2, inv.coeff(k,j));
+		        }
+	        }
+
+            rowOffset += offs * 2;
+        }
+	    Eigen::SparseMatrix<number_t> R_total(matrix.cols(), matrix.cols());
+        R_total.setFromTriplets(coeffR.begin(), coeffR.end());
+	    return  R_total;
+
+    }
+
+
+        template <typename Derived>
+    Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int offset, int end, int colDim) {
+
+        Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::COLAMDOrdering<int> > qr;
 
         qr.analyzePattern(matrix);
         qr.factorize(matrix);

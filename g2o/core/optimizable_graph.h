@@ -104,6 +104,8 @@ namespace g2o {
       private:
         friend struct OptimizableGraph;
       public:
+    	int activeEdgeCount;
+
         Vertex();
 
         //! returns a deep copy of the current vertex

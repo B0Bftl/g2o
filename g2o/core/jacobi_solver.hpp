@@ -124,6 +124,7 @@ bool JacobiSolver<Traits>::buildStructure(bool zeroBlocks)
   for (size_t i = 0; i < _optimizer->indexMapping().size(); ++i) {
     OptimizableGraph::Vertex* v = _optimizer->indexMapping()[i];
     int dim = v->dimension();
+    v->activeEdgeCount = 0;
     if (! v->marginalized()){
       v->setColInHessian(_sizePoses);
       _sizePoses+=dim;
@@ -180,12 +181,14 @@ bool JacobiSolver<Traits>::buildStructure(bool zeroBlocks)
       int ind1 = v1->hessianIndex();
       if (ind1 == -1)
         continue;
+      ++(v1->activeEdgeCount);
       int indexV1Bak = ind1;
       for (size_t vjIdx = viIdx + 1; vjIdx < e->vertices().size(); ++vjIdx) {
         OptimizableGraph::Vertex* v2 = (OptimizableGraph::Vertex*) e->vertex(vjIdx);
         int ind2 = v2->hessianIndex();
         if (ind2 == -1)
           continue;
+        ++(v2->activeEdgeCount);
         ind1 = indexV1Bak;
         bool transposedBlock = ind1 > ind2;
         if (transposedBlock){ // make sure, we allocate the upper triangle block
@@ -326,7 +329,7 @@ bool JacobiSolver<Traits>::solve(){
   if (! _doSchur){
     number_t t=get_monotonic_time();
     //bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
-	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3);
+	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3, _optimizer);
 
 	  G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
@@ -539,7 +542,6 @@ bool JacobiSolver<Traits>::buildSystem()
       const OptimizableGraph::Vertex* vi = static_cast<const OptimizableGraph::Vertex*>(e->vertex(0));
       const OptimizableGraph::Vertex* vj = static_cast<const OptimizableGraph::Vertex*>(e->vertex(1));
 
-
       if(vi->fixed() && vi->marginalized()) setFixedPoints.insert(vi->id());
       if(vi->fixed() && !vi->marginalized()) setFixedCameras.insert(vi->id());
       if(vj->fixed() && vj->marginalized()) setFixedPoints.insert(vj->id());
@@ -689,13 +691,9 @@ bool JacobiSolver<Traits>::buildSystem()
       iBase+=_sizePoses;
     v->copyB(_b+iBase);
   }
-  /*
-  saveMarket((*_JacobiP), "/home/lukas/Documents/eigenMatrices/jP.matx");
-  saveMarket((*_JacobiC), "/home/lukas/Documents/eigenMatrices/jC.matx");
-  saveMarket((_jacobiFull), "/home/lukas/Documents/eigenMatrices/jFull.matx");
-  saveMarket((_hessian), "/home/lukas/Documents/eigenMatrices/hessian.matx");
-  saveHessian("/home/lukas/Documents/eigenMatrices/hessian.txt");
-  */
+
+  saveMarket((*_jacobiFull), "/home/lukas/Documents/eigenMatrices/jFull.matx");
+
   return false;
 }
 

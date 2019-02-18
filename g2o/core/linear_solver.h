@@ -28,6 +28,7 @@
 #define G2O_LINEAR_SOLVER_H
 #include "sparse_block_matrix.h"
 #include "sparse_block_matrix_ccs.h"
+#include "sparse_optimizer.h"
 #include "Eigen/Sparse"
 
 namespace g2o {
@@ -62,7 +63,7 @@ class LinearSolver
      * solve caller with Eigen Matrix definition. Returns false if not defined
      */
     virtual bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-                       int _rowDim, int _colDimCam, int _colDimPoint) {
+                       int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer) {
         (void) A;
         (void) x;
         (void) b;
@@ -71,6 +72,7 @@ class LinearSolver
         (void) _rowDim;
         (void) _colDimCam;
         (void) _colDimPoint;
+        (void) optimizer;
         std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
         return false;
     }
