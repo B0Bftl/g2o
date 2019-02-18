@@ -298,6 +298,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	    T.emplace_back(0,1,5);
 	    T.emplace_back(1,0,2);
 	    T.emplace_back(1,1,3);
+
 	    T.emplace_back(2,2,4);
 	    T.emplace_back(2,3,2);
 	    T.emplace_back(3,2,1);
@@ -307,17 +308,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	    T.emplace_back(4,1,4);
 	    T.emplace_back(5,0,2);
 	    T.emplace_back(5,1,0);
+
 	    T.emplace_back(6,4,3);
 	    T.emplace_back(6,5,1);
-	    T.emplace_back(6,4,0);
-	    T.emplace_back(6,5,4);
+	    T.emplace_back(7,4,0);
+	    T.emplace_back(7,5,4);
 
-	    T.emplace_back(7,0,6);
-	    T.emplace_back(8,1,6);
-	    T.emplace_back(9,2,6);
-	    T.emplace_back(10,3,6);
-	    T.emplace_back(11,4,6);
-	    T.emplace_back(12,5,6);
+	    T.emplace_back(8,0,6);
+	    T.emplace_back(9,1,6);
+	    T.emplace_back(10,2,6);
+	    T.emplace_back(11,3,6);
+	    T.emplace_back(12,4,6);
+	    T.emplace_back(13,5,6);
 
 	    Eigen::SparseMatrix<number_t> mat (8+6,6);
 
@@ -330,41 +332,38 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 	    //Eigen::SparseMatrix<number_t> R1 = computeRp_inverse(mat,2,0);
 	    //Eigen::SparseMatrix<number_t> R2 = computeR_inverse(mat,0,0,0);
-	    
+
 
 
     }
 
     template <typename Derived>
-    Eigen::SparseMatrix<number_t> computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim) {
+    void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+		// qr decomp
+	    Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
 
-    	printMatrix(matrix, "fullMatrix", true);
-    	for (int i = 0; i < matrix.cols(); i += colDim) {
-
-
+	    for (int i = 0; i < matrix.cols(); i += colDim) {
+			// retreive current block
 		    Eigen::Ref<Eigen::SparseMatrix<number_t >> currentBlock = matrix.middleCols(i,colDim);
-		    printMatrix(currentBlock, "current Block", true);
-
-    		Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
 
 		    qr.analyzePattern(currentBlock);
 		    qr.factorize(currentBlock);
-		    Eigen::SparseMatrix<number_t> R = qr.matrixR().topLeftCorner(qr.rank(), qr.rank());
-		    printMatrix(R, "R", true);
+		    Eigen::MatrixXd R = qr.matrixR().topLeftCorner(qr.rank(), qr.rank());
 
+			for (int j = 0; j < R.cols(); ++j) {
+				for (int k = 0; k < R.rows(); ++k) {
+					coeffR.emplace_back(k + i, j + i, R.coeff(k,j));
+				}
+			}
     	}
-
-        return Eigen::SparseMatrix<number_t>(0,0);
 
     }
 
     template <typename Derived>
-    Eigen::SparseMatrix<number_t> computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams) {
+    Eigen::SparseMatrix<number_t> computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR) {
 
     	int rowOffset = 0;
     	int rowDim = 2;
-        std::vector<Eigen::Triplet<number_t >> coeffR;
-	    printMatrix(matrix, "original", true);
 
 	    for (int i = 0; i < 2; ++i) {
 
