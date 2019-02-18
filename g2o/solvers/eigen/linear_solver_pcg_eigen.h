@@ -39,6 +39,7 @@
 
 #include <iostream>
 #include <vector>
+#include <Eigen/src/Core/Matrix.h>
 
 namespace g2o {
 
@@ -113,10 +114,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
                int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer)
     {
 
-	    testing();
 
       _optimizer = optimizer;
-        // Get Matrix, x and b
+
+	    testing();
+
+	    // Get Matrix, x and b
       J =  A;
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType bVec(b, J.cols());
@@ -300,22 +303,34 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	    T.emplace_back(3,2,1);
 	    T.emplace_back(3,3,1);
 
-	    Eigen::SparseMatrix<number_t> mat (4,4);
+	    T.emplace_back(4,0,4);
+	    T.emplace_back(4,1,4);
+	    T.emplace_back(5,0,2);
+	    T.emplace_back(5,1,0);
+	    T.emplace_back(6,4,3);
+	    T.emplace_back(6,5,1);
+	    T.emplace_back(6,4,0);
+	    T.emplace_back(6,5,4);
+
+	    T.emplace_back(7,0,6);
+	    T.emplace_back(8,1,6);
+	    T.emplace_back(9,2,6);
+	    T.emplace_back(10,3,6);
+	    T.emplace_back(11,4,6);
+	    T.emplace_back(12,5,6);
+
+	    Eigen::SparseMatrix<number_t> mat (8+6,6);
 
 	    mat.setFromTriplets(T.begin(), T.end());
 
-	    Eigen::SparseMatrix<number_t> R1 = computeRp_inverse(mat,2,0);
-	    Eigen::SparseMatrix<number_t> R2 = computeR_inverse(mat,0,0,0);
+	    Eigen::MatrixXd dense = mat;
 
-	    std::cout << "Matching Size: " << R1.cols() << " " << R2.cols() << "x"<< R1.rows() << " " << R2.rows() << std::endl;
+	    Eigen::SparseMatrix<number_t> R1 = computeRc_inverse(mat,2);
 
-	    std::cout << "coeff: " << std::endl;
 
-	    for (int j = 0; j < R1.cols(); ++j) {
-		    for (int k = 0; k < R1.rows(); ++k) {
-			    std::cout << k << "x" << j << ": " << R1.coeff(k,j) << " | " << R2.coeff(k,j) << std::endl;
-		    }
-	    }
+	    //Eigen::SparseMatrix<number_t> R1 = computeRp_inverse(mat,2,0);
+	    //Eigen::SparseMatrix<number_t> R2 = computeR_inverse(mat,0,0,0);
+	    
 
 
     }
@@ -323,12 +338,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     template <typename Derived>
     Eigen::SparseMatrix<number_t> computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim) {
 
-        for (int i = 0; i < _optimizer->indexMapping().size(); ++i) {
-            const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i]);
+    	printMatrix(matrix, "fullMatrix", true);
+    	for (int i = 0; i < matrix.cols(); i += colDim) {
 
-            std::cout << "block: 2 x " << matrix.rows() << " starting at: 0 " <<  i * 2 << std::endl ;
 
-        }
+		    Eigen::Ref<Eigen::SparseMatrix<number_t >> currentBlock = matrix.middleCols(i,colDim);
+		    printMatrix(currentBlock, "current Block", true);
+
+    		Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
+
+		    qr.analyzePattern(currentBlock);
+		    qr.factorize(currentBlock);
+		    Eigen::SparseMatrix<number_t> R = qr.matrixR().topLeftCorner(qr.rank(), qr.rank());
+		    printMatrix(R, "R", true);
+
+    	}
 
         return Eigen::SparseMatrix<number_t>(0,0);
 
@@ -338,37 +362,80 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     Eigen::SparseMatrix<number_t> computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams) {
 
     	int rowOffset = 0;
+    	int rowDim = 2;
         std::vector<Eigen::Triplet<number_t >> coeffR;
+	    printMatrix(matrix, "original", true);
 
 	    for (int i = 0; i < 2; ++i) {
 
 	    //for (int i = 0; i < _optimizer->indexMapping().size() - numCams; ++i) {
             const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
-		    int offs = v->activeEdgeCount;
-		    offs = 2;
+		    // current block size dependent of edges
+            int blockSize = v->activeEdgeCount * 2;
+            blockSize = 2; 			//TODO: Debugging
 
-	        Eigen::MatrixXd block(offs * 2 + colDim, colDim);
-	        block.topRows(offs * 2) = matrix.block(rowOffset, i * colDim, offs * 2, colDim);
-			block.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * 2;
-            Eigen::ColPivHouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(block);
-            qr.compute(block);
-	        Eigen::MatrixXd inv = qr.matrixR().topRows(qr.matrixR().cols());
+		    Eigen::MatrixXd currentBlock(blockSize + colDim, colDim);
+	        // get current block. Row offset based on previous blocks, col offset on position in jacobian
+		    currentBlock.topRows(blockSize) = matrix.block(rowOffset, i * colDim, blockSize, colDim);
+			// attach lambda scaling
+		    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * 2;
 
-			inv = inv.inverse();
+		    printMatrix(currentBlock, "extracted Block", true);
+		    // initialize & compute qr in place
+	        Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+            qr.compute(currentBlock);
 
-	        for (int j = 0; j < inv.cols(); ++j) {
-		        for (int k = 0; k < inv.rows(); ++k) {
-			        coeffR.emplace_back(j+1 + i*2,k+1 + i*2, inv.coeff(k,j));
-		        }
-	        }
+            Eigen::MatrixXd tmp = qr.matrixQR().triangularView<Eigen::Upper>();
+		    printMatrix(tmp, "R", true);
 
-            rowOffset += offs * 2;
+		    Eigen::MatrixXd inv = tmp.topRows(tmp.cols());
+
+		    printMatrix(inv, "R", true);
+
+		    inv = inv.inverse();
+
+			printMatrix(inv, "R_inv", true);
+
+			for (int j = 0; j < inv.cols();++j) {
+				for (int k = 0; k < inv.cols();++k) {
+					coeffR.emplace_back(k + rowDim * i, j + rowDim * i, inv.coeff(k,j));
+				}
+			}
+
+		    rowOffset += blockSize;
         }
 	    Eigen::SparseMatrix<number_t> R_total(matrix.cols(), matrix.cols());
         R_total.setFromTriplets(coeffR.begin(), coeffR.end());
+
 	    return  R_total;
 
     }
+
+	template <typename Derived>
+	void printMatrix(const Eigen::MatrixBase<Derived>& matrix, std::string name, bool compact = false) {
+		std::cout << "printing " << name << std::endl << "----------------------------" << std::endl;
+    	if(compact) {
+		    for (int j = 0; j < matrix.rows(); ++j) {
+			    for (int k = 0; k < matrix.cols(); ++k) {
+				    std::cout  << "   " << matrix.coeff(j,k);
+			    }
+			    std::cout << std::endl;
+		    }
+    	} else {
+		    for (int j = 0; j < matrix.cols(); ++j) {
+			    for (int k = 0; k < matrix.rows(); ++k) {
+				    std::cout <<  k << " x " <<  j << ": " << matrix.coeff(k,j) << std::endl;
+			    }
+		    }
+    	}
+		std::cout << "----------------------------" << std::endl << std::endl;
+    }
+
+	template <typename Derived>
+	void printMatrix(const Eigen::SparseMatrixBase<Derived>& matrix, std::string name, bool compact = false) {
+		Eigen::MatrixXd denseMat = matrix;
+		printMatrix(denseMat, name, compact);
+	}
 
 
         template <typename Derived>
