@@ -133,6 +133,16 @@ int main(int argc, const char* argv[]){
 		numPoints = atoi(argv[7]);
 	}
 
+  int iterations = 10;
+  if (argc>8){
+    iterations = atoi(argv[8]);
+  }
+  std::string statsFilename = "";
+  if (argc>8){
+    statsFilename = (argv[9]);
+  }
+
+
   cout << "PIXEL_NOISE: " <<  PIXEL_NOISE << endl;
   cout << "OUTLIER_RATIO: " << OUTLIER_RATIO<<  endl;
   cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
@@ -140,7 +150,8 @@ int main(int argc, const char* argv[]){
   cout << "LinSolver: "<<  linSolver << endl;
 	cout << "Cameras: "<<  numCameras << endl;
 	cout << "Points: "<<  numPoints << endl;
-
+  cout << "Iterations: "<<  iterations << endl;
+  cout << "Stats File: "<<  statsFilename << endl;
 
 
   g2o::SparseOptimizer optimizer;
@@ -163,6 +174,8 @@ int main(int argc, const char* argv[]){
     g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
   );
   optimizer.setAlgorithm(solver);
+  if(statsFilename.length() > 0)
+    optimizer.setComputeBatchStatistics(true);
 
 
   vector<Vector3d> true_points;
@@ -299,7 +312,7 @@ int main(int argc, const char* argv[]){
   //optimizer.save("test.g2o");
   cout << endl;
   cout << "Performing full BA:" << endl;
-  optimizer.optimize(10);
+  optimizer.optimize(iterations);
   cout << endl;
   cout << "Point error before optimisation (inliers only): " << sqrt(sum_diff2/inliers.size()) << endl;
   point_num = 0;
@@ -326,4 +339,14 @@ int main(int argc, const char* argv[]){
   }
   cout << "Point error after optimisation (inliers only): " << sqrt(sum_diff2/inliers.size()) << endl;
   cout << endl;
+
+  if (statsFilename!=""){
+    cerr << "writing stats to file \"" << statsFilename << "\" ... ";
+    ofstream fout(statsFilename.c_str());
+    const g2o::BatchStatisticsContainer& bsc = optimizer.batchStatistics();
+    for (size_t i=0; i<bsc.size(); i++)
+      fout << bsc[i] << endl;
+    cerr << "done." << endl;
+  }
+
 }

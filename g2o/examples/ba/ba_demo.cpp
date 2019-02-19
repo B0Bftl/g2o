@@ -44,6 +44,7 @@
 #include "g2o/types/sba/types_six_dof_expmap.h"
 //#include "g2o/math_groups/se3quat.h"
 #include "g2o/solvers/structure_only/structure_only_solver.h"
+#include <g2o/core/batch_stats.h>
 
 using namespace Eigen;
 using namespace std;
@@ -136,6 +137,10 @@ int main(int argc, const char* argv[]){
   if (argc>8){
     iterations = atoi(argv[8]);
   }
+  std::string statsFilename = "";
+  if (argc>8){
+    statsFilename = (argv[9]);
+  }
 
 
   cout << "PIXEL_NOISE: " <<  PIXEL_NOISE << endl;
@@ -146,6 +151,8 @@ int main(int argc, const char* argv[]){
 	cout << "Cameras: "<<  numCameras << endl;
 	cout << "Points: "<<  numPoints << endl;
   cout << "Iterations: "<<  iterations << endl;
+  cout << "Stats File: "<<  statsFilename << endl;
+
 
 
 
@@ -170,7 +177,8 @@ int main(int argc, const char* argv[]){
     g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolver))
   );
   optimizer.setAlgorithm(solver);
-
+  if(statsFilename.length() > 0)
+    optimizer.setComputeBatchStatistics(true);
 
   vector<Vector3d> true_points;
   for (int i=0;i<numPoints; ++i)
@@ -334,4 +342,14 @@ int main(int argc, const char* argv[]){
   }
   cout << "Point error after optimisation (inliers only): " << sqrt(sum_diff2/inliers.size()) << endl;
   cout << endl;
+
+  if (statsFilename!=""){
+    cerr << "writing stats to file \"" << statsFilename << "\" ... ";
+    ofstream fout(statsFilename.c_str());
+    const g2o::BatchStatisticsContainer& bsc = optimizer.batchStatistics();
+    for (size_t i=0; i<bsc.size(); i++)
+      fout << bsc[i] << endl;
+    cerr << "done." << endl;
+  }
+
 }
