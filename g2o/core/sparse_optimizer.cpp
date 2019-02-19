@@ -217,7 +217,7 @@ namespace g2o{
     _activeVertices.clear();
     _activeVertices.reserve(vset.size());
 
-    for (int i=0; i < _activeEdges.size();++i)
+    for (size_t i = 0; i < _activeEdges.size();++i)
       _activeEdges[i]->setActive(false);
 
     _activeEdges.clear();

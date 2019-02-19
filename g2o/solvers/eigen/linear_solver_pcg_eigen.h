@@ -119,30 +119,28 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType bVec(b, J.cols());
 
-        // Compute Preconditioner R_inv
+        // Compute Preconditioner R_inv, store in coeffR
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
-      std::cout <<" computing Qr" << std::endl;
       std::vector<Eigen::Triplet<number_t >> coeffR;
 
       computeRc_inverse(Jc_tmp, _colDimCam, coeffR);
       computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
 
-
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
+      coeffR.clear();
 
-      std::cout << "computing done" << std::endl;
-
-        // apply Preconditioning with R_inv to J and b
+      // TODO: here we apply precond to the whole system
+      // apply Preconditioning with R_inv to J and b
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
 
       // get Jc and Jp from preconditioned J
       //TODO: Make this a REF or MAP
-      Eigen::SparseMatrix<number_t> Jc = _precondJ.leftCols(_numCams * _colDimCam);
-      Eigen::SparseMatrix<number_t> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
       // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
       VectorX::MapType xC(x, _numCams * _colDimCam);
@@ -167,7 +165,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
       Eigen::Ref<VectorX> rP = r.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
-      rC = bC - (Jc.transpose() * (Jp * xP)); // TODO: sign correct?
+      rC = bC - (Jc.transpose() * (Jp * xP));
 
 
 
@@ -222,9 +220,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         }
 
       }
-
+    //retrieve  xP
       xP = bP - (Jp.transpose() * (Jc * xC)) - rP;
-      //retrieve xC, xP
 
       /*
       std::cout << "iter: " << iteration << std::endl;
@@ -232,7 +229,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       for (int i = 0; i<J.cols();++i) {
           std::cout << xVec[i] << std::endl;
       }
-		*/
+
       //Eigen::VectorXd approx =  R_inv.transpose() * J.transpose() * J  * R_inv * xVec;
 	    Eigen::VectorXd approx =  _precondJ.transpose() * _precondJ * xVec;
 
@@ -242,7 +239,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       std::cout << "Residual: " << resAbs << std::endl;
 
-
+		*/
       xVec = R_inv * xVec;
 
 
@@ -345,7 +342,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	    int blockSize = 0;
 	    const OptimizableGraph::Vertex* v;
 
-	    for (int i = 0; i < _optimizer->indexMapping().size() - numCams; ++i) {
+	    for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size() - numCams); ++i) {
             v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
 		    // current block size dependent of edges
 

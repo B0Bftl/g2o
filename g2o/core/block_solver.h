@@ -145,12 +145,15 @@ namespace g2o {
 
       virtual void multiplyHessian(number_t* dest, const number_t* src) const { _Hpp->multiplySymmetricUpperTriangle(dest, src);}
 
-    protected:
+      virtual Eigen::SparseMatrix<number_t>& getJacobi() {return *_jacobiFull;};
+
+  protected:
       void resize(int* blockPoseIndices, int numPoseBlocks, 
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
 
       void deallocate();
 
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
       std::unique_ptr<SparseBlockMatrix<PoseLandmarkMatrixType>> _Hpl;

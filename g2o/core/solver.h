@@ -30,6 +30,7 @@
 #include "hyper_graph.h"
 #include "sparse_block_matrix.h"
 #include "g2o_core_api.h"
+#include "Eigen/Sparse"
 #include <cstddef>
 
 namespace g2o {
@@ -128,10 +129,13 @@ namespace g2o {
       virtual void setWriteDebug(bool) = 0;
       virtual bool writeDebug() const = 0;
 
+      virtual Eigen::SparseMatrix<number_t>& getJacobi() {return *_jacobiFull;};
+
       //! write the hessian to disk using the specified file name
       virtual bool saveHessian(const std::string& /*fileName*/) const = 0;
 
     protected:
+      std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
       SparseOptimizer* _optimizer;
       number_t* _x;
       number_t* _b;

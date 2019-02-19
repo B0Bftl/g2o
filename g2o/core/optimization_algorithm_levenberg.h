@@ -29,6 +29,7 @@
 
 #include "optimization_algorithm_with_hessian.h"
 #include "g2o_core_api.h"
+#include "Eigen/Sparse"
 
 #include <memory>
 

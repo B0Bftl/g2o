@@ -134,7 +134,9 @@ namespace g2o {
 
       virtual void multiplyHessian(number_t* dest, const number_t* src) const { _Hpp->multiplySymmetricUpperTriangle(dest, src);}
 
-    protected:
+      virtual Eigen::SparseMatrix<number_t>& getJacobi() {return *_jacobiFull;};
+
+  protected:
       void resize(int* blockPoseIndices, int numPoseBlocks, 
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
 
