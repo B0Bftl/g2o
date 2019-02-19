@@ -110,53 +110,30 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @param b pointer to array containing values to solve for
      * @return true if solving was successful, false otherwise
      */
-    bool solve(const Eigen::SparseMatrix<number_t>& A, number_t* x, number_t* b, int _numCams, int _numPoints,
-               int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer)
+    bool solve(const Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
+               int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer, number_t lambda)
     {
-
-
+	    (void) _rowDim;
       _optimizer = optimizer;
-
-	    testing();
-
-	    // Get Matrix, x and b
-      J =  A;
+      // Get Refs to x and b
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType bVec(b, J.cols());
 
         // Compute Preconditioner R_inv
-      Eigen::SparseMatrix<number_t> Jc_tmp = J.leftCols(_numCams * _colDimCam);
-      Eigen::SparseMatrix<number_t> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc_tmp = J.leftCols(_numCams * _colDimCam);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
       std::cout <<" computing Qr" << std::endl;
+      std::vector<Eigen::Triplet<number_t >> coeffR;
+
+      computeRc_inverse(Jc_tmp, _colDimCam, coeffR);
+      computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
 
 
-      Eigen::SparseMatrix<number_t> Rc_inv  = computeRc_inverse(Jc_tmp, _colDimCam);
-      Eigen::SparseMatrix<number_t> Rp_inv2 = computeRp_inverse(Jp_tmp, _colDimPoint, _numCams);
+      Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
+      R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
-      //Eigen::SparseMatrix<number_t> Rc_inv = computeR_inverse(Jc_tmp, 0, _numCams, _colDimCam);
-      Eigen::SparseMatrix<number_t> Rp_inv = computeR_inverse(Jp_tmp, _numCams, -1, _colDimPoint);
-        std::cout << "computing done" << std::endl;
-
-        //TODO: DEBUG
-
-        std::cout << "Matching Size: " << Rp_inv2.cols() << " " << Rp_inv.cols() << "x"<< Rp_inv2.rows() << " " << Rp_inv.rows() << std::endl;
-
-        std::cout << "coeff: " << std::endl;
-
-        for (int j = 0; j < Rp_inv.cols(); ++j) {
-        	for (int k = 0; k < Rp_inv.rows(); ++k) {
-				std::cout << k << "x" << j << ": " << Rp_inv.coeff(k,j) << " - " << Rp_inv2.coeff(k,j) << std::endl;
-        	}
-        }
-
-
-	    Eigen::MatrixXd R_inv_tmp = Eigen::MatrixXd::Zero(Rc_inv.cols() + Rp_inv.cols(), Rc_inv.cols() + Rp_inv.cols());
-      R_inv_tmp.setZero();
-      R_inv_tmp.topLeftCorner(Rc_inv.cols(), Rc_inv.cols()) = Rc_inv;
-      R_inv_tmp.bottomRightCorner(Rp_inv.cols(), Rp_inv.cols()) = Rp_inv;
-
-      Eigen::SparseMatrix<number_t> R_inv = R_inv_tmp.sparseView();
+      std::cout << "computing done" << std::endl;
 
         // apply Preconditioning with R_inv to J and b
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
@@ -286,7 +263,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     bool _blockOrdering;
     bool _writeDebug;
     SparseOptimizer* _optimizer;
-    SparseMatrix J;
     CholeskyDecomposition _cholesky;
 
     void testing () {
@@ -338,18 +314,20 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     }
 
     template <typename Derived>
-    void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+    void computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
 		// qr decomp
 	    Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
 
 	    for (int i = 0; i < matrix.cols(); i += colDim) {
 			// retreive current block
-		    Eigen::Ref<Eigen::SparseMatrix<number_t >> currentBlock = matrix.middleCols(i,colDim);
-
+		    Eigen::SparseMatrix<number_t> currentBlock = matrix.middleCols(i,colDim);
+			// compute QR
 		    qr.analyzePattern(currentBlock);
 		    qr.factorize(currentBlock);
 		    Eigen::MatrixXd R = qr.matrixR().topLeftCorner(qr.rank(), qr.rank());
-
+		    //get reverse
+		    R = R.inverse();
+			// save in triplet vector
 			for (int j = 0; j < R.cols(); ++j) {
 				for (int k = 0; k < R.rows(); ++k) {
 					coeffR.emplace_back(k + i, j + i, R.coeff(k,j));
@@ -360,53 +338,40 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     }
 
     template <typename Derived>
-    Eigen::SparseMatrix<number_t> computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+    void computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR, number_t lambda) {
 
     	int rowOffset = 0;
-    	int rowDim = 2;
+    	int rowDim = 3;
+	    int blockSize = 0;
+	    const OptimizableGraph::Vertex* v;
 
-	    for (int i = 0; i < 2; ++i) {
-
-	    //for (int i = 0; i < _optimizer->indexMapping().size() - numCams; ++i) {
-            const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
+	    for (int i = 0; i < _optimizer->indexMapping().size() - numCams; ++i) {
+            v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
 		    // current block size dependent of edges
-            int blockSize = v->activeEdgeCount * 2;
-            blockSize = 2; 			//TODO: Debugging
+
+            blockSize = v->activeEdgeCount * 2;
 
 		    Eigen::MatrixXd currentBlock(blockSize + colDim, colDim);
 	        // get current block. Row offset based on previous blocks, col offset on position in jacobian
 		    currentBlock.topRows(blockSize) = matrix.block(rowOffset, i * colDim, blockSize, colDim);
 			// attach lambda scaling
-		    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * 2;
-
-		    printMatrix(currentBlock, "extracted Block", true);
+		    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
 		    // initialize & compute qr in place
 	        Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
             qr.compute(currentBlock);
 
             Eigen::MatrixXd tmp = qr.matrixQR().triangularView<Eigen::Upper>();
-		    printMatrix(tmp, "R", true);
-
 		    Eigen::MatrixXd inv = tmp.topRows(tmp.cols());
-
-		    printMatrix(inv, "R", true);
-
+			// get inverse
 		    inv = inv.inverse();
-
-			printMatrix(inv, "R_inv", true);
-
-			for (int j = 0; j < inv.cols();++j) {
-				for (int k = 0; k < inv.cols();++k) {
-					coeffR.emplace_back(k + rowDim * i, j + rowDim * i, inv.coeff(k,j));
+			for (int j = 0; j < tmp.cols();++j) {
+				for (int k = 0; k < tmp.cols();++k) {
+					coeffR.emplace_back(numCams*6 + k + rowDim * i,numCams*6 + j + rowDim * i, inv.coeff(k,j));
 				}
 			}
 
 		    rowOffset += blockSize;
         }
-	    Eigen::SparseMatrix<number_t> R_total(matrix.cols(), matrix.cols());
-        R_total.setFromTriplets(coeffR.begin(), coeffR.end());
-
-	    return  R_total;
 
     }
 
@@ -438,7 +403,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
         template <typename Derived>
-    Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int offset, int end, int colDim) {
+    Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix) {
 
         Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::COLAMDOrdering<int> > qr;
 
@@ -477,7 +442,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     {
       number_t t=get_monotonic_time();
       if (! _blockOrdering) {
-        _cholesky.analyzePattern(J);
+        _cholesky.analyzePattern(A);
       } else {
         // block ordering with the Eigen Interface
         // This is really ugly currently, as it calls internal functions from Eigen
@@ -521,7 +486,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         }
         assert(scalarIdx == rows && "did not completely fill the permutation matrix");
         // analyze with the scalar permutation
-        _cholesky.analyzePatternWithPermutation(J, scalarP);
+        _cholesky.analyzePatternWithPermutation(A, scalarP);
 
       }
       G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
@@ -529,36 +494,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         globalStats->timeSymbolicDecomposition = get_monotonic_time() - t;
     }
 
-    void fillSparseMatrix(const SparseBlockMatrix<MatrixType>& A, bool onlyValues)
-    {
-      if (onlyValues) {
-        A.fillCCS(J.valuePtr(), true);
-      } else {
-
-        // create from triplet structure
-        std::vector<Triplet> triplets;
-        triplets.reserve(A.nonZeros());
-        for (size_t c = 0; c < A.blockCols().size(); ++c) {
-          int colBaseOfBlock = A.colBaseOfBlock(c);
-          const typename SparseBlockMatrix<MatrixType>::IntBlockMap& column = A.blockCols()[c];
-          for (typename SparseBlockMatrix<MatrixType>::IntBlockMap::const_iterator it = column.begin(); it != column.end(); ++it) {
-            int rowBaseOfBlock = A.rowBaseOfBlock(it->first);
-            const MatrixType& m = *(it->second);
-            for (int cc = 0; cc < m.cols(); ++cc) {
-              int aux_c = colBaseOfBlock + cc;
-              for (int rr = 0; rr < m.rows(); ++rr) {
-                int aux_r = rowBaseOfBlock + rr;
-                if (aux_r > aux_c)
-                  break;
-                triplets.push_back(Triplet(aux_r, aux_c, m(rr, cc)));
-              }
-            }
-          }
-        }
-        J.setFromTriplets(triplets.begin(), triplets.end());
-
-      }
-    }
 };
 
 } // end namespace

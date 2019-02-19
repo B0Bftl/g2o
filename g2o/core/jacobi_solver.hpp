@@ -329,7 +329,7 @@ bool JacobiSolver<Traits>::solve(){
   if (! _doSchur){
     number_t t=get_monotonic_time();
     //bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
-	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3, _optimizer);
+	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3, _optimizer, _lambda);
 
 	  G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
@@ -702,6 +702,7 @@ template <typename Traits>
 bool JacobiSolver<Traits>::setLambda(number_t lambda, bool backup)
 {
     (void) backup;
+    _lambda = lambda;
     //number_t lambdaRoot = sqrt(lambda);
 # ifdef G2O_OPENMP
 # pragma omp parallel for default (shared) if (_scaleCoeff.size() > 100)
@@ -743,6 +744,7 @@ void JacobiSolver<Traits>::restoreDiagonal()
   for (size_t i = 0; i < _scaleCoeff.size(); ++i) {
     _scaleCoeff[i].get() = 1;
   }
+  _lambda = 1;
   /*
   for (int i = 0; i < _numPoses; ++i) {
     PoseMatrixType *b=_Hpp->block(i,i);

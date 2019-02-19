@@ -139,7 +139,7 @@ namespace g2o {
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
 
       void deallocate();
-
+      number_t _lambda;
       std::vector<number_t> _errVector;
       std::vector<std::reference_wrapper<number_t>> _scaleCoeff;
 	  std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
