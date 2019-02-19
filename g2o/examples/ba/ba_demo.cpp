@@ -132,6 +132,11 @@ int main(int argc, const char* argv[]){
 	if (argc>7){
 		numPoints = atoi(argv[7]);
 	}
+  int iterations = 10;
+  if (argc>8){
+    iterations = atoi(argv[8]);
+  }
+
 
   cout << "PIXEL_NOISE: " <<  PIXEL_NOISE << endl;
   cout << "OUTLIER_RATIO: " << OUTLIER_RATIO<<  endl;
@@ -140,6 +145,8 @@ int main(int argc, const char* argv[]){
   cout << "LinSolver: "<<  linSolver << endl;
 	cout << "Cameras: "<<  numCameras << endl;
 	cout << "Points: "<<  numPoints << endl;
+  cout << "Iterations: "<<  iterations << endl;
+
 
 
 
@@ -299,7 +306,7 @@ int main(int argc, const char* argv[]){
   //optimizer.save("test.g2o");
   cout << endl;
   cout << "Performing full BA:" << endl;
-  optimizer.optimize(10);
+  optimizer.optimize(iterations);
   cout << endl;
   cout << "Point error before optimisation (inliers only): " << sqrt(sum_diff2/inliers.size()) << endl;
   point_num = 0;
