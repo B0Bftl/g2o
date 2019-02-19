@@ -74,6 +74,7 @@ namespace g2o {
       const JacobianXiOplusType& jacobianOplusXi() const { return _jacobianOplusXi;}
 
       virtual void constructQuadraticForm();
+      virtual void constructQuadraticFormNoHessian() {};
 
       virtual void initialEstimate(const OptimizableGraph::VertexSet& from, OptimizableGraph::Vertex* to);
 

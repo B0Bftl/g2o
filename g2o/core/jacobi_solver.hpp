@@ -551,7 +551,7 @@ bool JacobiSolver<Traits>::buildSystem()
       //for (int k = 0; k < sizeEdges; ++k) {
       //OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
       e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
-      e->constructQuadraticForm();
+      e->constructQuadraticFormNoHessian();
 
       _errVector.emplace_back(e->errorData()[0]);
       _errVector.emplace_back(e->errorData()[1]);

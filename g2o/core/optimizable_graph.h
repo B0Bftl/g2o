@@ -402,6 +402,8 @@ namespace g2o {
          * The off diagoinal block is accesed via _hessian.
          */
         virtual void constructQuadraticForm() = 0;
+        virtual void constructQuadraticFormNoHessian() = 0;
+
 
         /**
          * maps the internal matrix to some external memory location,
