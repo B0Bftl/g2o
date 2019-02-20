@@ -105,6 +105,7 @@ namespace g2o {
         friend struct OptimizableGraph;
       public:
     	int activeEdgeCount;
+        int acumulativeEdgeOffset;
 
         Vertex();
 

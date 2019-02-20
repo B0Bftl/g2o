@@ -521,12 +521,17 @@ bool JacobiSolver<Traits>::buildSystem()
 
 
   number_t* data;
-
+  int accumulatedEdges = 0;
 
   for (int k = 0;k < static_cast<int>(_optimizer->indexMapping().size()); ++k) {
-    const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[k]);
+    OptimizableGraph::Vertex* v = static_cast<OptimizableGraph::Vertex*>(_optimizer->indexMapping()[k]);
     // only iterate over point vertices
     _optimizer->maxDegree = std::max(optimizer()->maxDegree, v->edges().size());
+    if (v->marginalized()) {
+      v->acumulativeEdgeOffset = accumulatedEdges;
+      accumulatedEdges += v->activeEdgeCount;
+    }
+
     if(!v->marginalized()) continue;
 
     for (OptimizableGraph::EdgeSet::const_iterator it=v->edges().begin(); it!=v->edges().end(); ++it){
