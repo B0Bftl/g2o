@@ -495,14 +495,8 @@ bool JacobiSolver<Traits>::buildSystem()
 
   // resetting the terms for the pairwise constraints
   // built up the current system by storing the Hessian blocks in the edges and vertices
-# ifndef G2O_OPENMP
-  // no threading, we do not need to copy the workspace
-  JacobianWorkspace& jacobianWorkspace = _optimizer->jacobianWorkspace();
-# else
-  // if running with threads need to produce copies of the workspace for each thread
+
   JacobianWorkspace jacobianWorkspace = _optimizer->jacobianWorkspace();
-# pragma omp parallel for default (shared) firstprivate(jacobianWorkspace) if (_optimizer->activeEdges().size() > 100)
-# endif
   std::vector<Eigen::Triplet<number_t>> jacobiData;
 
   //TODO: Find correct values here
@@ -532,6 +526,7 @@ bool JacobiSolver<Traits>::buildSystem()
   for (int k = 0;k < static_cast<int>(_optimizer->indexMapping().size()); ++k) {
     const OptimizableGraph::Vertex* v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[k]);
     // only iterate over point vertices
+    _optimizer->maxDegree = std::max(optimizer()->maxDegree, v->edges().size());
     if(!v->marginalized()) continue;
 
     for (OptimizableGraph::EdgeSet::const_iterator it=v->edges().begin(); it!=v->edges().end(); ++it){
@@ -644,9 +639,6 @@ bool JacobiSolver<Traits>::buildSystem()
   }
 
   // flush the current system in a sparse block matrix
-# ifdef G2O_OPENMP
-# pragma omp parallel for default (shared) if (_optimizer->indexMapping().size() > 1000)
-# endif
 
   int dimCam = (_numPoses) * 6;
   int dimPoints = (_numLandmarks) * 3;
@@ -677,7 +669,7 @@ bool JacobiSolver<Traits>::buildSystem()
   }
   */
   _jacobiFull->setFromTriplets(jacobiData.begin(), jacobiData.end());
-
+  _jacobiFull->makeCompressed();
   // we need to scale jacobis every Step. To increase speed, we save pointers to scale entries once for o(1) access-
   _scaleCoeff.reserve(dimCam + dimPoints);
   for (int i = 0; i < dimCam + dimPoints; ++i) {

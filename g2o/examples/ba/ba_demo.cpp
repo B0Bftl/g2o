@@ -148,8 +148,8 @@ int main(int argc, const char* argv[]){
   cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
   cout << "STRUCTURE_ONLY: " << STRUCTURE_ONLY<< endl;
   cout << "LinSolver: "<<  linSolver << endl;
-	cout << "Cameras: "<<  numCameras << endl;
-	cout << "Points: "<<  numPoints << endl;
+  cout << "Cameras: "<<  numCameras << endl;
+  cout << "Points: "<<  numPoints << endl;
   cout << "Iterations: "<<  iterations << endl;
   cout << "Stats File: "<<  statsFilename << endl;
 

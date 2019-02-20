@@ -125,9 +125,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
       std::vector<Eigen::Triplet<number_t >> coeffR;
+      coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
 	    number_t timeQR = get_monotonic_time();
 
-      computeRc_inverse(Jc_tmp, _colDimCam, coeffR);
+      computeRc_inverse(J, _numCams, coeffR);
 	    std::cout << "QRc " <<  get_monotonic_time() - timeQR << std::endl;
 
 	    timeQR = get_monotonic_time();
@@ -333,15 +334,28 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
     template <typename Derived>
-    void computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& _matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+    void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR) {
 		// qr decomp
+	    Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);
 	    const size_t dimRBlock = 6;
-		Eigen::SparseMatrix<number_t > matrix = _matrix;
-	    for (int k=0; k < matrix.outerSize(); k += 6) {
+		number_t  timeSpentQR= 0;
+
+	    //Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+	    Eigen::Matrix<number_t, 6, 6> tmp;
+	    Eigen::Matrix<number_t, 6, 6> inv;
+
+	    std::vector<number_t> coeffBlock;
+		coeffBlock.resize(6*2*_optimizer->maxDegree + 6 * 6);
+	    //Eigen::SparseMatrix<number_t > matrix = _matrix;
+
+# ifdef G2O_OPENMP
+	    // no threading, we do not need to copy the workspace
+	    # pragma omp parallel for default (shared) firstprivate(tmp, inv, coeffBlock) schedule(dynamic)
+# endif
+	    for (int k=0; k < numCams * 6; k += 6) {
 		    Eigen::Index currentRow = 0;
 		    size_t blocksize = 0;
-		    std::vector<number_t> coeffBlock;
-
+		    //std::vector<number_t> coeffBlock;
 		    Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix,k);
 		    Eigen::SparseMatrix<number_t>::InnerIterator itB(matrix,k + 1);
 		    Eigen::SparseMatrix<number_t>::InnerIterator itC(matrix,k + 2);
@@ -357,12 +371,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    if(currentRow == INT_MAX) break; // All iterators done TODO: break?
 
 			    //Add coefficients of currentRow, 0 if not in column
+			    /*
 			    coeffBlock.emplace_back((itA && itA.row() == currentRow) ? itA.value() : 0);
 			    coeffBlock.emplace_back((itB && itB.row() == currentRow) ? itB.value() : 0);
 			    coeffBlock.emplace_back((itC && itC.row() == currentRow) ? itC.value() : 0);
 			    coeffBlock.emplace_back((itD && itD.row() == currentRow) ? itD.value() : 0);
 			    coeffBlock.emplace_back((itE && itE.row() == currentRow) ? itE.value() : 0);
 			    coeffBlock.emplace_back((itF && itF.row() == currentRow) ? itF.value() : 0);
+				*/
+			    coeffBlock[6*blocksize] = ((itA && itA.row() == currentRow) ? itA.value() : 0);
+			    coeffBlock[6*blocksize + 1] = ((itB && itB.row() == currentRow) ? itB.value() : 0);
+			    coeffBlock[6*blocksize + 2] = ((itC && itC.row() == currentRow) ? itC.value() : 0);
+			    coeffBlock[6*blocksize + 3] = ((itD && itD.row() == currentRow) ? itD.value() : 0);
+			    coeffBlock[6*blocksize + 4] = ((itE && itE.row() == currentRow) ? itE.value() : 0);
+			    coeffBlock[6*blocksize + 5] = ((itF && itF.row() == currentRow) ? itF.value() : 0);
+
 
 			    if (itA && itA.row() == currentRow) ++itA;
 			    if (itB && itB.row() == currentRow) ++itB;
@@ -374,19 +397,30 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 		    }
 		    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
 			Eigen::MatrixXd currentBlock = _currentBlock;
-		    Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+
+			number_t t = get_monotonic_time();
+
+			Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
 		    qr.compute(currentBlock);
-		    Eigen::MatrixXd tmp = qr.matrixQR().triangularView<Eigen::Upper>();
-		    Eigen::MatrixXd inv = tmp.topRows(tmp.cols());
+		    tmp = qr.matrixQR().triangularView<Eigen::Upper>();
+		    inv = tmp.topRows(tmp.cols());
 		    // get inverse
 		    inv = inv.inverse();
+		    long base = k * tmp.cols() * tmp.cols();
+
 		    for (int j = 0; j < tmp.cols();++j) {
 			    for (int i = 0; i < tmp.cols();++i) {
-				    coeffR.emplace_back(k + i, k + j, inv.coeff(i,j));
+				    //coeffR.emplace_back(k + i, k + j, inv.coeff(i,j));
+				    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j, inv.coeff(i,j));
 			    }
 		    }
+		    timeSpentQR += get_monotonic_time() -t;
 
 	    }
+
+	    std::cout << "QR C only: " << timeSpentQR << std::endl;
+
+
 
 	    /*
 	    for (int i = 0; i < matrix.cols(); i += colDim) {
@@ -416,6 +450,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	    int blockSize = 0;
 	    const OptimizableGraph::Vertex* v;
 
+	    Eigen::Matrix<number_t, 3, 3> tmp;
+	    Eigen::Matrix<number_t, 3 ,3> inv;
 	    for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size() - numCams); ++i) {
             v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
 		    // current block size dependent of edges
@@ -431,8 +467,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	        Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
             qr.compute(currentBlock);
 
-            Eigen::MatrixXd tmp = qr.matrixQR().triangularView<Eigen::Upper>();
-		    Eigen::MatrixXd inv = tmp.topRows(tmp.cols());
+            tmp = qr.matrixQR().triangularView<Eigen::Upper>();
+		    inv = tmp.topRows(tmp.cols());
 			// get inverse
 		    inv = inv.inverse();
 			for (int j = 0; j < tmp.cols();++j) {

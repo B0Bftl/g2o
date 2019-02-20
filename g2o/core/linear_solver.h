@@ -62,7 +62,7 @@ class LinearSolver
     /**
      * solve caller with Eigen Matrix definition and Jacobi Matix. Returns false if not defined
      */
-    virtual bool solve(const Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
+    virtual bool solve(Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
                        int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer, number_t _lambda) {
         (void) J;
         (void) x;
