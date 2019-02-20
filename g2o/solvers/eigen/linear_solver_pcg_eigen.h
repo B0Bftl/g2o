@@ -110,9 +110,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @param b pointer to array containing values to solve for
      * @return true if solving was successful, false otherwise
      */
-    bool solve(const Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
+    bool solve(Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
                int _rowDim, int _colDimCam, int _colDimPoint, SparseOptimizer* optimizer, number_t lambda)
     {
+	    number_t time = get_monotonic_time();
 	    (void) _rowDim;
       _optimizer = optimizer;
       // Get Refs to x and b
@@ -124,21 +125,30 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
       std::vector<Eigen::Triplet<number_t >> coeffR;
+	    number_t timeQR = get_monotonic_time();
 
       computeRc_inverse(Jc_tmp, _colDimCam, coeffR);
-      computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
+	    std::cout << "QRc " <<  get_monotonic_time() - timeQR << std::endl;
 
+	    timeQR = get_monotonic_time();
+	    computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
+	    std::cout << "QRp " <<  get_monotonic_time() - timeQR << std::endl;
+
+	    timeQR = get_monotonic_time();
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
-      coeffR.clear();
+	    std::cout << "QR matr" <<  get_monotonic_time() - timeQR << std::endl;
+
+	    coeffR.clear();
 
       // TODO: here we apply precond to the whole system
       // apply Preconditioning with R_inv to J and b
-      Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
+	    timeQR = get_monotonic_time();
+	    Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+	    std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
 
       // get Jc and Jp from preconditioned J
-      //TODO: Make this a REF or MAP
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
@@ -165,7 +175,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
       Eigen::Ref<VectorX> rP = r.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
-      rC = bC - (Jc.transpose() * (Jp * xP));
+      rC.noalias() = bC - (Jc.transpose() * (Jp * xP));
 
 
 
@@ -192,36 +202,47 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       number_t scaledInitialError = eta * rC.dot(rC) + bP.dot(bP);
 
-      for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
+      number_t r_dot_r = scaledInitialError;
+      number_t r1_dot_r1 = scaledInitialError;
+
+	    std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
+
+	    time = get_monotonic_time();
+
+	    for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
         isEven = iteration % 2;
-        if(isEven && (r.dot(r) + r_1.dot(r_1)) < scaledInitialError )
+        if(isEven && r_dot_r + r1_dot_r1 < scaledInitialError)
         	break;
 
         q_1 = q;
         q = 1 - e_1;
         if (!isEven) {
             // odd
-            rP = (1/q) * ( (Jp.transpose()  * (Jc* rC)) - (e_1 * rP_1) );
+            rP.noalias() = (1/q) * ( (Jp.transpose()  * (Jc* rC)) - (e_1 * rP_1) );
 	        rP_1 = rP;
 	        rC.setZero();
         } else {
             // even
-            rC = (1/q) * ( (Jc.transpose() * (Jp * rP)) - (e_1 * rC_1 ));
+            rC.noalias() = (1/q) * ( (Jc.transpose() * (Jp * rP)) - (e_1 * rC_1 ));
 	        rP.setZero();
         }
         e_2 = e_1;
-        e_1 = q *( r.dot(r) / r_1.dot(r_1));
+
+	    r_dot_r =  r.dot(r);
+	    r1_dot_r1 = r_1.dot(r_1);
+        e_1 = q *( r_dot_r / r1_dot_r1);
 
         if(isEven) {
             //even
-            xC_diff = (1/(q * q_1)) * (rC_1 + (e_1 * e_2 * xC_diff)); //TODO: rC_1 okay? oder verschieben?
+            xC_diff = (1/(q * q_1)) * (rC_1 + (e_1 * e_2 * xC_diff));
 	        rC_1 = rC;
 	        xC = xC_diff + xC;
         }
 
       }
     //retrieve  xP
-      xP = bP - (Jp.transpose() * (Jc * xC)) - rP;
+      xP.noalias() = bP - (Jp.transpose() * (Jc * xC)) - rP;
+	    std::cout << "Looptime " <<  get_monotonic_time() - time << std::endl;
 
       /*
       std::cout << "iter: " << iteration << std::endl;
@@ -310,11 +331,64 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
     }
 
-    template <typename Derived>
-    void computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
-		// qr decomp
-	    Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::NaturalOrdering<int> > qr;
 
+    template <typename Derived>
+    void computeRc_inverse(const Eigen::SparseMatrixBase<Derived>& _matrix, int colDim, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+		// qr decomp
+	    const size_t dimRBlock = 6;
+		Eigen::SparseMatrix<number_t > matrix = _matrix;
+	    for (int k=0; k < matrix.outerSize(); k += 6) {
+		    Eigen::Index currentRow = 0;
+		    size_t blocksize = 0;
+		    std::vector<number_t> coeffBlock;
+
+		    Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix,k);
+		    Eigen::SparseMatrix<number_t>::InnerIterator itB(matrix,k + 1);
+		    Eigen::SparseMatrix<number_t>::InnerIterator itC(matrix,k + 2);
+		    Eigen::SparseMatrix<number_t>::InnerIterator itD(matrix,k + 3);
+		    Eigen::SparseMatrix<number_t>::InnerIterator itE(matrix,k + 4);
+		    Eigen::SparseMatrix<number_t>::InnerIterator itF(matrix,k + 5);
+		    while (itA || itB || itC || itD ||itE || itF) {
+
+			    currentRow = std::min({itA ? itA.row() : INT_MAX, itB ? itB.row() : INT_MAX,
+			                              itC ? itC.row() : INT_MAX, itD ? itD.row() : INT_MAX,
+			                              itE ? itE.row() : INT_MAX, itF ? itF.row() : INT_MAX});
+
+			    if(currentRow == INT_MAX) break; // All iterators done TODO: break?
+
+			    //Add coefficients of currentRow, 0 if not in column
+			    coeffBlock.emplace_back((itA && itA.row() == currentRow) ? itA.value() : 0);
+			    coeffBlock.emplace_back((itB && itB.row() == currentRow) ? itB.value() : 0);
+			    coeffBlock.emplace_back((itC && itC.row() == currentRow) ? itC.value() : 0);
+			    coeffBlock.emplace_back((itD && itD.row() == currentRow) ? itD.value() : 0);
+			    coeffBlock.emplace_back((itE && itE.row() == currentRow) ? itE.value() : 0);
+			    coeffBlock.emplace_back((itF && itF.row() == currentRow) ? itF.value() : 0);
+
+			    if (itA && itA.row() == currentRow) ++itA;
+			    if (itB && itB.row() == currentRow) ++itB;
+			    if (itC && itC.row() == currentRow) ++itC;
+			    if (itD && itD.row() == currentRow) ++itD;
+			    if (itE && itE.row() == currentRow) ++itE;
+			    if (itF && itF.row() == currentRow) ++itF;
+			    ++blocksize;
+		    }
+		    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
+			Eigen::MatrixXd currentBlock = _currentBlock;
+		    Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+		    qr.compute(currentBlock);
+		    Eigen::MatrixXd tmp = qr.matrixQR().triangularView<Eigen::Upper>();
+		    Eigen::MatrixXd inv = tmp.topRows(tmp.cols());
+		    // get inverse
+		    inv = inv.inverse();
+		    for (int j = 0; j < tmp.cols();++j) {
+			    for (int i = 0; i < tmp.cols();++i) {
+				    coeffR.emplace_back(k + i, k + j, inv.coeff(i,j));
+			    }
+		    }
+
+	    }
+
+	    /*
 	    for (int i = 0; i < matrix.cols(); i += colDim) {
 			// retreive current block
 		    Eigen::SparseMatrix<number_t> currentBlock = matrix.middleCols(i,colDim);
@@ -331,7 +405,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 				}
 			}
     	}
-
+		*/
     }
 
     template <typename Derived>
