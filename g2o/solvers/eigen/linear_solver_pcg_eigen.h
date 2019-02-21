@@ -55,33 +55,11 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
   public:
     typedef Eigen::SparseMatrix<number_t, Eigen::ColMajor> SparseMatrix;
     typedef Eigen::Triplet<number_t> Triplet;
-    typedef Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> PermutationMatrix;
-
-    // I shouldnt need that
-    /**
-     * \brief Sub-classing Eigen's SimplicialLDLT to perform ordering with a given ordering
-     */
-    class CholeskyDecomposition : public Eigen::SimplicialLDLT<SparseMatrix, Eigen::Upper>
-    {
-      public:
-        CholeskyDecomposition() : Eigen::SimplicialLDLT<SparseMatrix, Eigen::Upper>() {}
-        using Eigen::SimplicialLDLT< SparseMatrix, Eigen::Upper>::analyzePattern_preordered;
-
-        void analyzePatternWithPermutation(SparseMatrix& a, const PermutationMatrix& permutation)
-        {
-          m_Pinv = permutation;
-          m_P = permutation.inverse();
-          int size = a.cols();
-          SparseMatrix ap(size, size);
-          ap.selfadjointView<Eigen::Upper>() = a.selfadjointView<UpLo>().twistedBy(m_P);
-          analyzePattern_preordered(ap, true);
-        }
-    };
 
   public:
     LinearSolverPCGEigen() :
       LinearSolver<MatrixType>(),
-      _init(true), _blockOrdering(false), _writeDebug(false)
+      _init(true), _writeDebug(false)
     {
     }
 
@@ -126,28 +104,28 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       std::vector<Eigen::Triplet<number_t >> coeffR;
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
-	    number_t timeQR = get_monotonic_time();
+      number_t timeQR = get_monotonic_time();
 
       computeRc_inverse(J, _numCams, coeffR);
-	    std::cout << "QRc " <<  get_monotonic_time() - timeQR << std::endl;
+      std::cout << "QRc " <<  get_monotonic_time() - timeQR << std::endl;
 
-	    timeQR = get_monotonic_time();
-	    computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
-	    std::cout << "QRp " <<  get_monotonic_time() - timeQR << std::endl;
+      timeQR = get_monotonic_time();
+      computeRp_inverse(Jp_tmp, _colDimPoint, _numCams, coeffR, lambda);
+      std::cout << "QRp " <<  get_monotonic_time() - timeQR << std::endl;
 
-	    timeQR = get_monotonic_time();
+      timeQR = get_monotonic_time();
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
-	    std::cout << "QR matr" <<  get_monotonic_time() - timeQR << std::endl;
+      std::cout << "QR matr" <<  get_monotonic_time() - timeQR << std::endl;
 
 	    coeffR.clear();
 
       // TODO: here we apply precond to the whole system
       // apply Preconditioning with R_inv to J and b
-	    timeQR = get_monotonic_time();
-        Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
-        Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
-	    std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
+      timeQR = get_monotonic_time();
+      Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
+      Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+      std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
 
       // get Jc and Jp from preconditioned J
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
@@ -176,8 +154,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
       Eigen::Ref<VectorX> rP = r.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
-      rC.noalias() = bC - (Jc.transpose() * (Jp * xP));
-
+      rC = bC;
+      rC.noalias() -= Jc.transpose() * (Jp * xP);
+      //rC.noalias() = bC - (Jc.transpose() * (Jp * xP));
+      rP.setZero();
 
 
       // Previous r
@@ -191,7 +171,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       number_t q = 1;
       number_t q_1 = 1;
-      number_t eta = 0.01;
+      number_t eta = 0.1; //TODO: eta value benchmarking
 
       size_t maxIter = J.rows();
 
@@ -201,17 +181,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       // compute Initial error
 
-      number_t scaledInitialError = eta * rC.dot(rC) + bP.dot(bP);
+      number_t scaledInitialError = eta * rC.dot(rC);
 
       number_t r_dot_r = scaledInitialError;
       number_t r1_dot_r1 = scaledInitialError;
 
-	    std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
+	  std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
 
-	    time = get_monotonic_time();
+	  time = get_monotonic_time();
 
-	    for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
-        isEven = iteration % 2;
+	  for (iteration = 1; iteration < maxIter + maxIter%2; ++iteration) {
+
+	  	isEven = !static_cast<bool>(iteration % 2);
         if(isEven && r_dot_r + r1_dot_r1 < scaledInitialError)
         	break;
 
@@ -219,12 +200,16 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         q = 1 - e_1;
         if (!isEven) {
             // odd
-            rP.noalias() = (1/q) * ( (Jp.transpose()  * (Jc* rC)) - (e_1 * rP_1) );
+            rP.noalias() = Jp.transpose()  * (Jc* rC);
+            rP -= (e_1 * rP_1);
+            rP *= (1/q);
 	        rP_1 = rP;
 	        rC.setZero();
         } else {
             // even
-            rC.noalias() = (1/q) * ( (Jc.transpose() * (Jp * rP)) - (e_1 * rC_1 ));
+            rC.noalias() = Jc.transpose() * (Jp * rP);
+            rC -= (e_1 * rC_1 );
+            rC *= (1/q);
 	        rP.setZero();
         }
         e_2 = e_1;
@@ -235,26 +220,26 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
         if(isEven) {
             //even
-            xC_diff = (1/(q * q_1)) * (rC_1 + (e_1 * e_2 * xC_diff));
+            xC_diff = e_1 * e_2 * xC_diff; //aliasing needed
+            xC_diff += rC_1;
+            xC_diff *= (1/(q * q_1));
 	        rC_1 = rC;
 	        xC = xC_diff + xC;
         }
 
       }
     //retrieve  xP
-      xP.noalias() = bP - (Jp.transpose() * (Jc * xC)) - rP;
-	    std::cout << "Looptime " <<  get_monotonic_time() - time << std::endl;
+    xP.noalias() = bP - rP;
+	xP.noalias() -=  Jp.transpose() * (Jc * xC);
+	//xP.noalias() = bP - (Jp.transpose() * (Jc * xC)) - rP;
 
       xVec = R_inv * xVec;
 
+      std::cout << "Looptime " <<  get_monotonic_time() - time << " with "<< iteration << " iterations" << std::endl;
 
 
       return true;
     }
-
-    //! do the AMD ordering on the blocks or on the scalar matrix
-    bool blockOrdering() const { return _blockOrdering;}
-    void setBlockOrdering(bool blockOrdering) { _blockOrdering = blockOrdering;}
 
     //! write a debug dump of the system matrix if it is not SPD in solve
     virtual bool writeDebug() const { return _writeDebug;}
@@ -262,10 +247,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
   protected:
     bool _init;
-    bool _blockOrdering;
     bool _writeDebug;
     SparseOptimizer* _optimizer;
-    CholeskyDecomposition _cholesky;
 
     void testing () {
     	std::cout << "testing" << std::endl;
@@ -319,119 +302,131 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     template <typename Derived>
     void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR) {
 		// qr decomp
-	    Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);
+	    //Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);
 	    //const size_t dimRBlock = 6;
 		number_t  timeSpentQR= 0;
 
 	    //Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-	    Eigen::Matrix<number_t, 6, 6> inv;
+	    //Eigen::Matrix<number_t, 6, 6> inv;
 
-	    std::vector<number_t> coeffBlock;
-		coeffBlock.resize(6*2*_optimizer->maxDegree + 6 * 6);
 	    long base = 0;
+	    std::vector<number_t> coeffBlock;
+#ifdef G2O_OPENMP
+	    # pragma omp parallel default (shared) firstprivate(base,timeSpentQR, coeffBlock)
+	    {
+#endif
+		    Eigen::Matrix<number_t, 6, 6> inv;
+		    Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);
+		    coeffBlock.resize(6*2*_optimizer->maxDegree + 6 * 6);
+#ifdef G2O_OPENMP
+		#pragma omp for schedule(guided)
+#endif
+		    for (int k=0; k < numCams * 6; k += 6) {
+			    Eigen::Index currentRow = 0;
+			    size_t blocksize = 0;
+			    //std::vector<number_t> coeffBlock;
+			    Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix,k);
+			    Eigen::SparseMatrix<number_t>::InnerIterator itB(matrix,k + 1);
+			    Eigen::SparseMatrix<number_t>::InnerIterator itC(matrix,k + 2);
+			    Eigen::SparseMatrix<number_t>::InnerIterator itD(matrix,k + 3);
+			    Eigen::SparseMatrix<number_t>::InnerIterator itE(matrix,k + 4);
+			    Eigen::SparseMatrix<number_t>::InnerIterator itF(matrix,k + 5);
+			    while (itA || itB || itC || itD ||itE || itF) {
 
-# ifdef G2O_OPENMP
-	    # pragma omp parallel for default (shared) firstprivate(inv, coeffBlock, base) schedule(guided)
-# endif
-	    for (int k=0; k < numCams * 6; k += 6) {
-		    Eigen::Index currentRow = 0;
-		    size_t blocksize = 0;
-		    //std::vector<number_t> coeffBlock;
-		    Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix,k);
-		    Eigen::SparseMatrix<number_t>::InnerIterator itB(matrix,k + 1);
-		    Eigen::SparseMatrix<number_t>::InnerIterator itC(matrix,k + 2);
-		    Eigen::SparseMatrix<number_t>::InnerIterator itD(matrix,k + 3);
-		    Eigen::SparseMatrix<number_t>::InnerIterator itE(matrix,k + 4);
-		    Eigen::SparseMatrix<number_t>::InnerIterator itF(matrix,k + 5);
-		    while (itA || itB || itC || itD ||itE || itF) {
+				    currentRow = std::min({itA ? itA.row() : INT_MAX, itB ? itB.row() : INT_MAX,
+				                              itC ? itC.row() : INT_MAX, itD ? itD.row() : INT_MAX,
+				                              itE ? itE.row() : INT_MAX, itF ? itF.row() : INT_MAX});
 
-			    currentRow = std::min({itA ? itA.row() : INT_MAX, itB ? itB.row() : INT_MAX,
-			                              itC ? itC.row() : INT_MAX, itD ? itD.row() : INT_MAX,
-			                              itE ? itE.row() : INT_MAX, itF ? itF.row() : INT_MAX});
+				    if(currentRow == INT_MAX) break; // All iterators done TODO: break?
 
-			    if(currentRow == INT_MAX) break; // All iterators done TODO: break?
-
-			    //Add coefficients of currentRow, 0 if not in column
-			    coeffBlock[6*blocksize] = ((itA && itA.row() == currentRow) ? itA.value() : 0);
-			    coeffBlock[6*blocksize + 1] = ((itB && itB.row() == currentRow) ? itB.value() : 0);
-			    coeffBlock[6*blocksize + 2] = ((itC && itC.row() == currentRow) ? itC.value() : 0);
-			    coeffBlock[6*blocksize + 3] = ((itD && itD.row() == currentRow) ? itD.value() : 0);
-			    coeffBlock[6*blocksize + 4] = ((itE && itE.row() == currentRow) ? itE.value() : 0);
-			    coeffBlock[6*blocksize + 5] = ((itF && itF.row() == currentRow) ? itF.value() : 0);
+				    //Add coefficients of currentRow, 0 if not in column
+				    coeffBlock[6*blocksize] = ((itA && itA.row() == currentRow) ? itA.value() : 0);
+				    coeffBlock[6*blocksize + 1] = ((itB && itB.row() == currentRow) ? itB.value() : 0);
+				    coeffBlock[6*blocksize + 2] = ((itC && itC.row() == currentRow) ? itC.value() : 0);
+				    coeffBlock[6*blocksize + 3] = ((itD && itD.row() == currentRow) ? itD.value() : 0);
+				    coeffBlock[6*blocksize + 4] = ((itE && itE.row() == currentRow) ? itE.value() : 0);
+				    coeffBlock[6*blocksize + 5] = ((itF && itF.row() == currentRow) ? itF.value() : 0);
 
 
-			    if (itA && itA.row() == currentRow) ++itA;
-			    if (itB && itB.row() == currentRow) ++itB;
-			    if (itC && itC.row() == currentRow) ++itC;
-			    if (itD && itD.row() == currentRow) ++itD;
-			    if (itE && itE.row() == currentRow) ++itE;
-			    if (itF && itF.row() == currentRow) ++itF;
-			    ++blocksize;
-		    }
-		    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
-			Eigen::MatrixXd currentBlock = _currentBlock;
+				    if (itA && itA.row() == currentRow) ++itA;
+				    if (itB && itB.row() == currentRow) ++itB;
+				    if (itC && itC.row() == currentRow) ++itC;
+				    if (itD && itD.row() == currentRow) ++itD;
+				    if (itE && itE.row() == currentRow) ++itE;
+				    if (itF && itF.row() == currentRow) ++itF;
+				    ++blocksize;
+			    }
+			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
+				Eigen::MatrixXd currentBlock = _currentBlock;
 
-			number_t t = get_monotonic_time();
+				Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+			    qr.compute(currentBlock);
+			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
+			    // get inverse
+			    inv = inv.inverse().eval();
+			    base = (k/6) * inv.cols() * inv.cols();
 
-			Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-		    qr.compute(currentBlock);
-		    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
-		    // get inverse
-		    inv = inv.inverse().eval();
-		    base = k * inv.cols() * inv.cols();
-
-		    for (int j = 0; j < inv.cols();++j) {
-			    for (int i = 0; i < inv.cols();++i) {
-				    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j, inv.coeff(i,j));
+			    for (int j = 0; j < inv.cols();++j) {
+				    for (int i = 0; i < inv.cols();++i) {
+					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j, inv.coeff(i,j));
+				    }
 			    }
 		    }
-		    timeSpentQR += get_monotonic_time() -t;
-
-	    }
-
-	    std::cout << "QR C only: " << timeSpentQR << std::endl;
+		    std::cout << "QR C only: " << timeSpentQR << std::endl;
+#ifdef G2O_OPENMP
+	    } //close parallel region
+#endif
     }
 
 
     template <typename Derived>
     void computeRp_inverse(const Eigen::SparseMatrixBase<Derived>& matrix, int colDim, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR, number_t lambda) {
 
-    	int rowOffset = 0;
     	int rowDim = 3;
-	    int blockSize = 0;
-	    const OptimizableGraph::Vertex* v;
-		long base;
 
-	    Eigen::Matrix<number_t, 3 ,3> inv;
+#ifdef G2O_OPENMP
+# pragma omp parallel default (shared)
+	    {
+#endif
+		    int rowOffset = 0;
+		    int blockSize = 0;
+		    const OptimizableGraph::Vertex *v;
+		    long base = 0;
+		    Eigen::Matrix<number_t, 3, 3> inv;
 
-# ifdef G2O_OPENMP
-# pragma omp parallel for default (shared) firstprivate(inv, blockSize, rowOffset, base) private(v) schedule(guided)
-# endif
-	    for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size() - numCams); ++i) {
-            v = static_cast<const OptimizableGraph::Vertex*>(_optimizer->indexMapping()[i + numCams]);
-		    // current block size dependent of edges
-            blockSize = v->activeEdgeCount * 2;
-			rowOffset = v->acumulativeEdgeOffset * 2;
-		    Eigen::MatrixXd currentBlock(blockSize + colDim, colDim);
-	        // get current block. Row offset based on previous blocks, col offset on position in jacobian
-		    currentBlock.topRows(blockSize) = matrix.block(rowOffset, i * colDim, blockSize, colDim);
-			// attach lambda scaling
-		    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
-		    // initialize & compute qr in place
-	        Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-            qr.compute(currentBlock);
+#ifdef G2O_OPENMP
+#pragma omp for schedule(guided)
+#endif
+		    for (int i = 0; i < static_cast<int>(_optimizer->indexMapping().size() - numCams); ++i) {
+			    v = static_cast<const OptimizableGraph::Vertex *>(_optimizer->indexMapping()[i + numCams]);
+			    // current block size dependent of edges
+			    blockSize = v->activeEdgeCount * 2;
+			    rowOffset = v->acumulativeEdgeOffset * 2;
+			    Eigen::MatrixXd currentBlock(blockSize + colDim, colDim);
+			    // get current block. Row offset based on previous blocks, col offset on position in jacobian
+			    currentBlock.topRows(blockSize) = matrix.block(rowOffset, i * colDim, blockSize, colDim);
+			    // attach lambda scaling
+			    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
+			    // initialize & compute qr in place
+			    Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+			    qr.compute(currentBlock);
 
-		    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3,3>(0,0);
-		    //inv = tmp.topRows(tmp.cols());
-			// get inverse
-		    inv = inv.inverse().eval();
-		    base = numCams * 36 + 9 * i;
-			for (int j = 0; j < inv.cols();++j) {
-				for (int k = 0; k < inv.cols();++k) {
-					coeffR[base++] = Eigen::Triplet<number_t>(numCams*6 + k + rowDim * i,numCams*6 + j + rowDim * i, inv.coeff(k,j));
-				}
-			}
+			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
+			    //inv = tmp.topRows(tmp.cols());
+			    // get inverse
+			    inv = inv.inverse().eval();
+			    base = numCams * 36 + 9 * i;
+			    for (int j = 0; j < inv.cols(); ++j) {
+				    for (int k = 0; k < inv.cols(); ++k) {
+					    coeffR[base++] = Eigen::Triplet<number_t>(numCams * 6 + k + rowDim * i,
+					                                              numCams * 6 + j + rowDim * i, inv.coeff(k, j));
+				    }
+			    }
+		    }
+
+#ifdef G2O_OPENMP
 	    }
+#endif
 
     }
 
@@ -489,69 +484,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
         Eigen::SparseMatrix<number_t> R_inv =  lu.solve(I);
 
         return R_inv;
-    }
-
-
-    /**
-     * compute the symbolic decompostion of the matrix only once.
-     * Since A has the same pattern in all the iterations, we only
-     * compute the fill-in reducing ordering once and re-use for all
-     * the following iterations.
-     */
-    void computeSymbolicDecomposition(const SparseBlockMatrix<MatrixType>& A)
-    {
-      number_t t=get_monotonic_time();
-      if (! _blockOrdering) {
-        _cholesky.analyzePattern(A);
-      } else {
-        // block ordering with the Eigen Interface
-        // This is really ugly currently, as it calls internal functions from Eigen
-        // and modifies the SparseMatrix class
-        Eigen::PermutationMatrix<Eigen::Dynamic,Eigen::Dynamic> blockP;
-        {
-          // prepare a block structure matrix for calling AMD
-          std::vector<Triplet> triplets;
-          for (size_t c = 0; c < A.blockCols().size(); ++c){
-            const typename SparseBlockMatrix<MatrixType>::IntBlockMap& column = A.blockCols()[c];
-            for (typename SparseBlockMatrix<MatrixType>::IntBlockMap::const_iterator it = column.begin(); it != column.end(); ++it) {
-              const int& r = it->first;
-              if (r > static_cast<int>(c)) // only upper triangle
-                break;
-              triplets.push_back(Triplet(r, c, 0.));
-            }
-          }
-
-          // call the AMD ordering on the block matrix.
-          // Relies on Eigen's internal stuff, probably bad idea
-          SparseMatrix auxBlockMatrix(A.blockCols().size(), A.blockCols().size());
-          auxBlockMatrix.setFromTriplets(triplets.begin(), triplets.end());
-          typename CholeskyDecomposition::CholMatrixType C;
-          C = auxBlockMatrix.selfadjointView<Eigen::Upper>();
-          Eigen::internal::minimum_degree_ordering(C, blockP);
-        }
-
-        int rows = A.rows();
-        assert(rows == A.cols() && "Matrix A is not square");
-
-        // Adapt the block permutation to the scalar matrix
-        PermutationMatrix scalarP;
-        scalarP.resize(rows);
-        int scalarIdx = 0;
-        for (int i = 0; i < blockP.size(); ++i) {
-          const int& p = blockP.indices()(i);
-          int base  = A.colBaseOfBlock(p);
-          int nCols = A.colsOfBlock(p);
-          for (int j = 0; j < nCols; ++j)
-            scalarP.indices()(scalarIdx++) = base++;
-        }
-        assert(scalarIdx == rows && "did not completely fill the permutation matrix");
-        // analyze with the scalar permutation
-        _cholesky.analyzePatternWithPermutation(A, scalarP);
-
-      }
-      G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
-      if (globalStats)
-        globalStats->timeSymbolicDecomposition = get_monotonic_time() - t;
     }
 
 };
