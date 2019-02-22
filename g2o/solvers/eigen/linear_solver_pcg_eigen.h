@@ -118,128 +118,121 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
       std::cout << "QR matr" <<  get_monotonic_time() - timeQR << std::endl;
 
-	    coeffR.clear();
+      coeffR.clear();
 
       // TODO: here we apply precond to the whole system
       // apply Preconditioning with R_inv to J and b
       timeQR = get_monotonic_time();
-      Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
-      Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+      //Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
+      //Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
       std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
 
-      // get Jc and Jp from preconditioned J
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
+      timeQR = get_monotonic_time();
+	  Eigen::SparseMatrix<number_t> M = R_inv.transpose() * R_inv;
+	  Eigen::SimplicialLDLT<Eigen::SparseMatrix<number_t >> solver;
+	  solver.analyzePattern(M);
+	  solver.factorize(M);
+	  Eigen::VectorXd y(xVec.rows());
+	  std::cout << M.size() << "  Apply RR " <<  get_monotonic_time() - timeQR << std::endl;
 
-      // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
-      VectorX::MapType xC(x, _numCams * _colDimCam);
-      VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
-        // Reference b
-      Eigen::Ref<VectorX> bC = _precond_b.segment(0, _numCams * _colDimCam);
-      Eigen::Ref<VectorX> bP = _precond_b.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
+
+      // get Jc and Jp from preconditioned J
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
+
+
 
       // Preconditioning is complete.
       // Initialize Algorithm.
 
-      number_t e_2 = 0;
-      number_t e_1 = 0;
-      // previous x
-      VectorX xC_diff(xC.rows());
-      xC_diff.setZero();
+      // Reference b
+      Eigen::Ref<VectorX> bC = bVec.segment(0, _numCams * _colDimCam);
+      Eigen::Ref<VectorX> bP = bVec.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
+
+      number_t eta = 0.1;
+      // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
+      VectorX::MapType xC(x, _numCams * _colDimCam);
+      VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
+
+      VectorX s(xVec.rows());
+
+      Eigen::Ref<VectorX> sC = s.segment(0, _numCams * _colDimCam);
+      Eigen::Ref<VectorX> sP = s.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
+
       xC.setZero();
 
       xP = bP;
-      xC.setZero();
-      VectorX r(xVec.rows());
-
-      Eigen::Ref<VectorX> rC = r.segment(0, _numCams * _colDimCam);
-      Eigen::Ref<VectorX> rP = r.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
-      rC = bC;
-      rC.noalias() -= Jc.transpose() * (Jp * xP);
-      //rC.noalias() = bC - (Jc.transpose() * (Jp * xP));
-      rP.setZero();
+      Eigen::VectorXd p = bVec - J.transpose() * (J * xVec);
+      s = p;
 
 
-      // Previous r
-      VectorX r_1(xVec.rows());
-      Eigen::Ref<VectorX> rC_1 = r_1.segment(0, _numCams * _colDimCam);
-      Eigen::Ref<VectorX> rP_1 = r_1.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
 
-      rC_1 = rC;
-      rP_1 = rP;
+      number_t beta;
 
+      Eigen::VectorXd q = J * p;
 
-      number_t q = 1;
-      number_t q_1 = 1;
-      number_t eta = 0.1; //TODO: eta value benchmarking
 
       size_t maxIter = J.rows();
 
-      //maxIter = 200;
       size_t iteration = 0;
       bool isEven = false;
 
       // compute Initial error
-
-      number_t scaledInitialError = eta * rC.dot(rC);
-
-      number_t r_dot_r = scaledInitialError;
-      number_t r1_dot_r1 = scaledInitialError;
+      number_t scaledInitialError = eta * s.norm();
 
 	  std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
 
 	  time = get_monotonic_time();
+	  number_t alpha;
 
-	  for (iteration = 1; iteration < maxIter + maxIter%2; ++iteration) {
+
+	  y = solver.solve(s);
+
+	  number_t gamma = s.dot(y);
+	  number_t gamma_old = gamma;
+
+	  for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
+
+	  	if (s.norm() < scaledInitialError)
+	  		break;
 
 	  	isEven = !static_cast<bool>(iteration % 2);
-        if(isEven && r_dot_r + r1_dot_r1 < scaledInitialError)
-        	break;
 
-        q_1 = q;
-        q = 1 - e_1;
-        if (!isEven) {
-            // odd
-            rP.noalias() = Jp.transpose()  * (Jc* rC);
-            rP -= (e_1 * rP_1);
-            rP *= (1/q);
-	        rP_1 = rP;
-	        rC.setZero();
-        } else {
-            // even
-            rC.noalias() = Jc.transpose() * (Jp * rP);
-            rC -= (e_1 * rC_1 );
-            rC *= (1/q);
-	        rP.setZero();
-        }
-        e_2 = e_1;
+	  	alpha = gamma/ q.squaredNorm();
+	  	xVec += alpha * p;
+	  	if (!isEven) {
+	  		//odd
+			sC = (-1) * alpha * Jc.transpose() * q;
+			sP.setZero();
+	  	} else {
+	  		//even
+	  		sP = (-1) * alpha * Jp.transpose() * q;
+	  		sC.setZero();
+	  	}
+	  	y = solver.solve(s);
 
-	    r_dot_r =  r.dot(r);
-	    r1_dot_r1 = r_1.dot(r_1);
-        e_1 = q *( r_dot_r / r1_dot_r1);
 
-        if(isEven) {
-            //even
-            xC_diff = e_1 * e_2 * xC_diff; //aliasing needed
-            xC_diff += rC_1;
-            xC_diff *= (1/(q * q_1));
-	        rC_1 = rC;
-	        xC = xC_diff + xC;
-        }
+	  	gamma = s.dot(y);
+	  	beta = gamma/gamma_old;
+	  	gamma_old = gamma;
+		p = y + beta * p;
 
+		if(!isEven) {
+			//odd
+			q = beta * q + Jc * sC;
+		} else {
+			q = beta * q + Jp * sP;
+		}
       }
-    //retrieve  xP
-    xP.noalias() = bP - rP;
-	xP.noalias() -=  Jp.transpose() * (Jc * xC);
-	//xP.noalias() = bP - (Jp.transpose() * (Jc * xC)) - rP;
 
-      xVec = R_inv * xVec;
-
+	  xVec = R_inv * xVec;
       std::cout << "Looptime " <<  get_monotonic_time() - time << " with "<< iteration << " iterations" << std::endl;
-
 
       return true;
     }
+
+
+
 
     //! write a debug dump of the system matrix if it is not SPD in solve
     virtual bool writeDebug() const { return _writeDebug;}
@@ -363,7 +356,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    qr.compute(currentBlock);
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
-			    inv = inv.inverse().eval();
+			    //inv = inv.inverse().eval();
 			    base = (k/6) * inv.cols() * inv.cols();
 
 			    for (int j = 0; j < inv.cols();++j) {
@@ -414,7 +407,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
-			    inv = inv.inverse().eval();
+			    //inv = inv.inverse().eval();
 			    base = numCams * 36 + 9 * i;
 			    for (int j = 0; j < inv.cols(); ++j) {
 				    for (int k = 0; k < inv.cols(); ++k) {
