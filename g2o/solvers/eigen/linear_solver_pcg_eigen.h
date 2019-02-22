@@ -124,7 +124,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       // apply Preconditioning with R_inv to J and b
       timeQR = get_monotonic_time();
       //Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
-      //Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+      Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
       std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
 
       timeQR = get_monotonic_time();
@@ -146,8 +146,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       // Initialize Algorithm.
 
       // Reference b
-      Eigen::Ref<VectorX> bC = bVec.segment(0, _numCams * _colDimCam);
-      Eigen::Ref<VectorX> bP = bVec.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
+      const Eigen::Ref<const VectorX> bC = _precond_b.segment(0, _numCams * _colDimCam);
+      const Eigen::Ref<const VectorX> bP = _precond_b.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
 
       number_t eta = 0.1;
       // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
@@ -162,7 +162,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xC.setZero();
 
       xP = bP;
-      Eigen::VectorXd p = bVec - J.transpose() * (J * xVec);
+      Eigen::VectorXd p = _precond_b - J.transpose() * (J * xVec);
       s = p;
 
 
@@ -215,7 +215,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	gamma = s.dot(y);
 	  	beta = gamma/gamma_old;
 	  	gamma_old = gamma;
-		p = y + beta * p;
+		p = -y + beta * p;
 
 		if(!isEven) {
 			//odd
@@ -356,7 +356,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    qr.compute(currentBlock);
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
-			    //inv = inv.inverse().eval();
+			    inv = inv.inverse().eval();
 			    base = (k/6) * inv.cols() * inv.cols();
 
 			    for (int j = 0; j < inv.cols();++j) {
@@ -407,7 +407,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
-			    //inv = inv.inverse().eval();
+			    inv = inv.inverse().eval();
 			    base = numCams * 36 + 9 * i;
 			    for (int j = 0; j < inv.cols(); ++j) {
 				    for (int k = 0; k < inv.cols(); ++k) {
