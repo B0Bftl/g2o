@@ -370,6 +370,10 @@ bool EdgeSE3ProjectXYZ::read(std::istream &is) {
       if (i != j)
         information()(j, i) = information()(i, j);
     }
+  is >> fx;
+  is >> fy;
+  is >> cx;
+  is >> cy;
   return true;
 }
 
@@ -383,6 +387,8 @@ bool EdgeSE3ProjectXYZ::write(std::ostream &os) const {
     for (int j = i; j < 2; j++) {
       os << " " << information()(i, j);
     }
+
+  os << " " << fx << " " << fy << " " << cx << " " << cy << " ";
   return os.good();
 }
 
