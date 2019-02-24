@@ -89,7 +89,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
      * @return true if solving was successful, false otherwise
      */
     bool solve(Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
-               int _rowDim, int _colDimCam, int _colDimPoint, number_t lambda)
+               int _rowDim, int _colDimCam, int _colDimPoint, number_t lambda, number_t _eta)
     {
       (void) _rowDim;
       // Get Refs to x and b
@@ -148,7 +148,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       const Eigen::Ref<const VectorX> bC = _precond_b.segment(0, _numCams * _colDimCam);
       const Eigen::Ref<const VectorX> bP = _precond_b.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
 
-      number_t eta = 0.1;
+      number_t eta = _eta;
       // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);

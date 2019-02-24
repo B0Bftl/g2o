@@ -63,7 +63,7 @@ class LinearSolver
      * solve caller with Eigen Matrix definition and Jacobi Matix. Returns false if not defined
      */
     virtual bool solve(Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
-                       int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda) {
+                       int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda, number_t _eta = 0.1) {
         (void) J;
         (void) x;
         (void) b;
@@ -73,6 +73,7 @@ class LinearSolver
         (void) _colDimCam;
         (void) _colDimPoint;
         (void) _lambda;
+	    (void) _eta;
         std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
         return false;
     }
