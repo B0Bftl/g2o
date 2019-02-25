@@ -107,39 +107,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
 
       computeRc_inverse(J, _numCams, coeffR);
-	    //std::cout << "QRc " <<  get_monotonic_time() - timeQR << std::endl;
-
       computeRp_inverse(J, _colDimPoint, _numCams, _numPoints, coeffR, lambda);
-	    //std::cout << "QRp " <<  get_monotonic_time() - timeQR << std::endl;
 
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
-	    //std::cout << "QR matr" <<  get_monotonic_time() - timeQR << std::endl;
 
-	  //if(_writeDebug) printMatrix(R_inv, "R_inverse");
-
-	  //coeffR.clear();
-
-      // TODO: here we apply precond to the whole system
       // apply Preconditioning with R_inv to J and b
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
-      //std::cout << "Apply QR " <<  get_monotonic_time() - timeQR << std::endl;
-
-      /*
-	  Eigen::SparseMatrix<number_t> M = R_inv.transpose() * R_inv;
-	  Eigen::SimplicialLDLT<Eigen::SparseMatrix<number_t >> solver;
-	  solver.analyzePattern(M);
-	  solver.factorize(M);
-	  Eigen::VectorXd y(xVec.rows());
-	  //std::cout << M.size() << "  Apply RR " <<  get_monotonic_time() - timeQR << std::endl;
-      */
 
       // get Jc and Jp from preconditioned J
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
-
-
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
       // Preconditioning is complete.
       // Initialize Algorithm.
@@ -161,51 +140,48 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xC.setZero();
 
       xP = bP;
-      Eigen::VectorXd p = _precond_b - J.transpose() * (J * xVec);
+      Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
       s = p;
-
-
 
       number_t beta;
 
-      Eigen::VectorXd q = J * p;
+      Eigen::VectorXd q = _precondJ * p;
 
 
-      size_t maxIter = J.rows();
+      long maxIter = J.rows();
 
-      size_t iteration = 0;
+      long iteration = 0;
       bool isEven = false;
-
-      // compute Initial error
-      number_t scaledInitialError = eta * s.norm();
 
 	  //std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
 
 	  number_t alpha;
 
 
-	  //y = solver.solve(s);
-
-	  //number_t gamma = s.dot(y);
 	  number_t gamma = s.dot(s);
 	  number_t gamma_old = gamma;
 
+
+	  // compute Initial error
+	  number_t scaledInitialError = eta * s.dot(s);
+
+
 	  for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
 
-	  	if (s.norm() < scaledInitialError)
+	  	if (gamma < scaledInitialError)
 	  		break;
 
 	  	isEven = !static_cast<bool>(iteration % 2);
 
-	  	alpha = gamma/ q.squaredNorm();
+	  	alpha = gamma/ q.dot(q);
 	  	xVec += alpha * p;
 	  	if (!isEven) {
 	  		//odd
-			sC = (-1) * alpha * Jc.transpose() * q;
+			sC.noalias() = (-1) * alpha * Jc.transpose() * q;
 			sP.setZero();
 	  	} else {
 	  		//even
-	  		sP = (-1) * alpha * Jp.transpose() * q;
+	  		sP.noalias() = (-1) * alpha * Jp.transpose() * q;
 	  		sC.setZero();
 	  	}
 	  	//y = solver.solve(s);
@@ -225,9 +201,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			q = beta * q + Jp * sP;
 		}
       }
-
 	  xVec = R_inv * xVec;
-      //std::cout << "Looptime " <<  get_monotonic_time() - time << " with "<< iteration << " iterations" << std::endl;
 
       return true;
     }
@@ -258,7 +232,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			for (int i = 0; i < numCams; ++i) {
 				if (max < (_matrix.col(i*6).nonZeros() - 1) / 2)
 					max = (_matrix.col(i*6).nonZeros() - 1) / 2;
-				std::cout <<  _matrix.col(i*6).nonZeros() << std::endl;
 			}
 #ifdef G2O_OPENMP
 #pragma omp critical
@@ -285,7 +258,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	        getMaxDegree(_matrix, numCams);
 
 #ifdef G2O_OPENMP
-	    # pragma omp parallel default (shared) firstprivate(base, coeffBlock)
+	    # pragma omp parallel default (shared) firstprivate(base, coeffBlock) if(numCams > 10)
 	    {
 #endif
 		    Eigen::Matrix<number_t, 6, 6> inv;
@@ -305,21 +278,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    Eigen::SparseMatrix<number_t>::InnerIterator itF(matrix,k + 5);
 			    while (itA && itB && itC && itD && itE && itF && itA.row() == itB.row()) {
 
-			    	/*
-				    currentRow = std::min({itA ? itA.row() : INT_MAX, itB ? itB.row() : INT_MAX,
-				                              itC ? itC.row() : INT_MAX, itD ? itD.row() : INT_MAX,
-				                              itE ? itE.row() : INT_MAX, itF ? itF.row() : INT_MAX});
-
-				    if(currentRow == INT_MAX) break; // All iterators done TODO: break?
-
-				    //Add coefficients of currentRow, 0 if not in column
-				    coeffBlock[6*blocksize] = ((itA && itA.row() == currentRow) ? itA.value() : 0);
-				    coeffBlock[6*blocksize + 1] = ((itB && itB.row() == currentRow) ? itB.value() : 0);
-				    coeffBlock[6*blocksize + 2] = ((itC && itC.row() == currentRow) ? itC.value() : 0);
-				    coeffBlock[6*blocksize + 3] = ((itD && itD.row() == currentRow) ? itD.value() : 0);
-			    	coeffBlock[6*blocksize + 4] = ((itE && itE.row() == currentRow) ? itE.value() : 0);
-				    coeffBlock[6*blocksize + 5] = ((itF && itF.row() == currentRow) ? itF.value() : 0);
-					*/
 			    	assert(itA.row() == itB.row()
 			    	&& itA.row() == itC.row()
 			    	&& itA.row() == itD.row()
@@ -339,25 +297,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 					++itD;
 					++itE;
 					++itF;
-				    /*
-				    if (itA && itA.row() == currentRow) ++itA;
-				    if (itB && itB.row() == currentRow) ++itB;
-				    if (itC && itC.row() == currentRow) ++itC;
-				    if (itD && itD.row() == currentRow) ++itD;
-				    if (itE && itE.row() == currentRow) ++itE;
-				    if (itF && itF.row() == currentRow) ++itF;
-				    */
+
 				    ++blocksize;
 			    }
 			    // add lambda entries. All other entries are 0 by initialization
 			    assert(6*(blocksize + 5) + 5 <= coeffBlock.size());
+			    // clear from previous iteration
+			    for(unsigned long j = 6* (blocksize); j < 6*(blocksize+5) +5; ++j) coeffBlock[j] = 0;
 
-				coeffBlock[6 * blocksize] = itA.value();
-			    coeffBlock[6 * (++blocksize) + 1] = itB.value();
-			    coeffBlock[6 * (++blocksize) + 2] = itC.value();
-			    coeffBlock[6 * (++blocksize) + 3] = itD.value();
-			    coeffBlock[6 * (++blocksize) + 4] = itE.value();
-			    coeffBlock[6 * (++blocksize) + 5] = itF.value();
+				coeffBlock[6 * (blocksize++)] = itA.value();
+			    coeffBlock[6 * (blocksize++) + 1] = itB.value();
+			    coeffBlock[6 * (blocksize++) + 2] = itC.value();
+			    coeffBlock[6 * (blocksize++) + 3] = itD.value();
+			    coeffBlock[6 * (blocksize++) + 4] = itE.value();
+			    coeffBlock[6 * (blocksize++) + 5] = itF.value();
+
 
 			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
 				Eigen::MatrixXd currentBlock = _currentBlock;
@@ -366,12 +320,13 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    qr.compute(currentBlock);
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
+
 			    inv = inv.inverse().eval();
 			    base = (k/6) * inv.cols() * inv.cols();
 
 			    for (int j = 0; j < inv.cols();++j) {
 				    for (int i = 0; i < inv.cols();++i) {
-					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j, inv.coeff(i,j));
+					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j,(-1) * inv.coeff(i,j));
 				    }
 			    }
 		    }
@@ -390,7 +345,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
 #ifdef G2O_OPENMP
-# pragma omp parallel default (shared)
+# pragma omp parallel default (shared) if(numPoints > 50)
 	    {
 #endif
 		    int rowOffset = 0;
@@ -417,12 +372,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    currentBlock.topRows(blockSize) = matrix.block(rowOffset, colIndex, blockSize, colDim);
 			    // attach lambda scaling
 			    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
+
 			    // initialize & compute qr in place
 			    Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
 			    qr.compute(currentBlock);
 
 
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
+
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
 			    inv = inv.inverse().eval();
@@ -430,7 +387,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    for (int j = 0; j < inv.cols(); ++j) {
 				    for (int k = 0; k < inv.cols(); ++k) {
 					    coeffR[base++] = Eigen::Triplet<number_t>(numCams * 6 + k + rowDim * i,
-					                                              numCams * 6 + j + rowDim * i, inv.coeff(k, j));
+					                                              numCams * 6 + j + rowDim * i, (-1) * inv.coeff(k, j));
 				    }
 			    }
 		    }
