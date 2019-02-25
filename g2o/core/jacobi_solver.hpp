@@ -699,13 +699,14 @@ template <typename Traits>
 bool JacobiSolver<Traits>::setLambda(number_t lambda, bool backup)
 {
     (void) backup;
-    _lambda = lambda;
-    //number_t lambdaRoot = sqrt(lambda);
+    number_t lambdaRoot = sqrt(lambda);
+    _lambda = lambdaRoot;
+
 # ifdef G2O_OPENMP
 # pragma omp parallel for default (shared) if (_scaleCoeff.size() > 100)
 # endif
     for (size_t i = 0; i < _scaleCoeff.size(); ++i) {
-      _scaleCoeff[i].get() = lambda;
+      _scaleCoeff[i].get() = lambdaRoot;
     }
 
 
