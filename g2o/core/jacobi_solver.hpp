@@ -664,7 +664,7 @@ bool JacobiSolver<Traits>::buildSystem()
   // Additionally allocate Identity below jacobi for lm lambda scaling.
   _jacobiFull->resize(rowDim + dimCam + dimPoints, dimCam + dimPoints);
   for (int i = 0; i < dimCam + dimPoints; ++i) {
-  	jacobiData.emplace_back(rowDim + i,i,1);
+  	jacobiData.emplace_back(rowDim + i,i,0);
     _errVector.emplace_back(0);
   }
   /*
@@ -739,9 +739,9 @@ void JacobiSolver<Traits>::restoreDiagonal()
 # pragma omp parallel for default (shared) if (_scaleCoeff.size() > 100)
 # endif
   for (size_t i = 0; i < _scaleCoeff.size(); ++i) {
-    _scaleCoeff[i].get() = 1;
+    _scaleCoeff[i].get() = 0;
   }
-  _lambda = 1;
+  _lambda = 0;
   /*
   for (int i = 0; i < _numPoses; ++i) {
     PoseMatrixType *b=_Hpp->block(i,i);
