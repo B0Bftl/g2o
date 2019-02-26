@@ -186,10 +186,8 @@ int main(int argc, char** argv) {
   cholSolver.compute(hessian);
   VectorXd xChol = cholSolver.solve(b);
 
+  std::cout << "norm of difference: " << (x-xChol).norm() << std::endl;
 
-
-    printMatrix(x, "X");
-	printMatrix(xChol, "xChol");
 
 
 }
