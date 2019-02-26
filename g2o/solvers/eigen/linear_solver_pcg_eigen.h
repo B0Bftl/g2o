@@ -107,6 +107,9 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       //number_t time_R = get_monotonic_time();
       std::vector<Eigen::Triplet<number_t >> coeffR;
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
+
+
+
       //std::cout << "Allocating coeffR: " << get_monotonic_time() - time_R << std::endl;
 
       //time_R = get_monotonic_time();
@@ -120,21 +123,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t >> Rc = R_inv.topRows(_numCams * 6);
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t >> Rp = R_inv.bottomRows(_numPoints * 3);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6,_numCams * 6);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,_numPoints * 3);
 
       //std::cout << "Time for QR total: " << get_monotonic_time() - time_total << std::endl;
 
 
-	    //time_R = get_monotonic_time();
+      //time_R = get_monotonic_time();
       // apply Preconditioning with R_inv to J and b
-      Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
+      //Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
 
 
       // get Jc and Jp from preconditioned J
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
 
       //std::cout << "Time Applying QR: " << get_monotonic_time() - time_R << std::endl;
       //time_R = get_monotonic_time();
@@ -152,6 +155,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
       VectorX s(xVec.rows());
+      //VectorX tmp(xVec.rows());
+
 
       Eigen::Ref<VectorX> sC = s.segment(0, _numCams * _colDimCam);
       Eigen::Ref<VectorX> sP = s.segment(_numCams* _colDimCam , _numPoints * _colDimPoint);
@@ -161,13 +166,13 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xP = bP;
       //Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
       Eigen::VectorXd p = _precond_b;
-      p.noalias() -=_precondJ.transpose() * (_precondJ * xVec);
+      p.noalias() -= R_inv.transpose() *  (J.transpose() * (J * (R_inv * xVec)));
 
       s = p;
 
       number_t beta;
 
-      Eigen::VectorXd q = _precondJ * p;
+      Eigen::VectorXd q = J * (R_inv * p);
 
 
       long maxIter = J.rows();
@@ -201,11 +206,11 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	xVec.noalias() += alpha * p;
 	  	if (!isEven) {
 	  		//odd
-			sC.noalias() = (-1) * alpha * Jc.transpose() * q;
+			sC.noalias() = (-1) * alpha * Rc.transpose() * (Jc.transpose() * q);
 			sP.setZero();
 	  	} else {
 	  		//even
-	  		sP.noalias() = (-1) * alpha * Jp.transpose() * q;
+	  		sP.noalias() = (-1) * alpha * Rp.transpose() * (Jp.transpose() * q);
 	  		sC.setZero();
 	  	}
 	  	//y = solver.solve(s);
@@ -222,13 +227,13 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			//odd
 			//q = beta * q + Jc * sC;
 			q = beta * q;
-			q.noalias() += Jc * sC;
+			q.noalias() += Jc * (Rc * sC);
 
 		} else {
 			// even
 			//q = beta * q + Jp * sP;
 			q = beta * q;
-			q.noalias() += Jp * sP;
+			q.noalias() += Jp * (Rp * sP);
 		}
       }
 	  xVec = R_inv * xVec;
