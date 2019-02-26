@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
 	std::string matFile;
   std::string vecFile;
 
-  int iterations = 5;
+  //int iterations = 5;
   std::string statsFile = "";
 
 

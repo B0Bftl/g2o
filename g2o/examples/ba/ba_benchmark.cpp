@@ -74,7 +74,7 @@ int main(int argc, char** argv){
   }
 
   std::string graphFile = "";
-  //int iterations = 5;
+  int iterations = 5;
   std::string statsFile = "";
 
 
