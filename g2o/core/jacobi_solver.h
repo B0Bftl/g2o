@@ -178,17 +178,8 @@ namespace g2o {
   template<int p, int l>
   using JacobiSolverPL = JacobiSolver< JacobiSolverTraits<p, l> >;
 
-  //variable size solver
-  using JacobiSolverX = JacobiSolverPL<Eigen::Dynamic, Eigen::Dynamic>;
-
   // solver for BA/3D SLAM
   using JacobiSolver_6_3 = JacobiSolverPL<6, 3>;
-
-  // solver fo BA with scale
-  using JacobiSolver_7_3 = JacobiSolverPL<7, 3>;
-
-  // 2Dof landmarks 3Dof poses
-  using JacobiSolver_3_2 = JacobiSolverPL<3, 2>;
 
 } // end namespace
 
