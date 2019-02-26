@@ -140,7 +140,10 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xC.setZero();
 
       xP = bP;
-      Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
+      //Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
+      Eigen::VectorXd p = _precond_b;
+      p.noalias() -=_precondJ.transpose() * _precondJ * xVec;
+
       s = p;
 
       number_t beta;
@@ -174,7 +177,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	isEven = !static_cast<bool>(iteration % 2);
 
 	  	alpha = gamma/ q.dot(q);
-	  	xVec += alpha * p;
+	  	xVec.noalias() += alpha * p;
 	  	if (!isEven) {
 	  		//odd
 			sC.noalias() = (-1) * alpha * Jc.transpose() * q;
@@ -190,15 +193,21 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	//gamma = s.dot(y);
 	  	beta = gamma/gamma_old;
 	  	gamma_old = gamma;
-		//p = -y + beta * p;
-		p = s + beta * p;
+	  	//p = s + beta * p;
+		p = beta * p;
+		p += s;
 
 		if(!isEven) {
 			//odd
-			q = beta * q + Jc * sC;
+			//q = beta * q + Jc * sC;
+			q = beta * q;
+			q.noalias() += Jc * sC;
+
 		} else {
 			// even
-			q = beta * q + Jp * sP;
+			//q = beta * q + Jp * sP;
+			q = beta * q;
+			q.noalias() += Jp * sP;
 		}
       }
 	  xVec = R_inv * xVec;
@@ -321,12 +330,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
 
-			    inv = inv.inverse().eval();
+			    inv = (-1) * inv.inverse().eval();
 			    base = (k/6) * inv.cols() * inv.cols();
 
 			    for (int j = 0; j < inv.cols();++j) {
 				    for (int i = 0; i < inv.cols();++i) {
-					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j,(-1) * inv.coeff(i,j));
+					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j,inv.coeff(i,j));
 				    }
 			    }
 		    }
@@ -382,12 +391,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
-			    inv = inv.inverse().eval();
+			    inv =  (-1) * inv.inverse().eval();
 			    base = numCams * 36 + 9 * i;
 			    for (int j = 0; j < inv.cols(); ++j) {
 				    for (int k = 0; k < inv.cols(); ++k) {
 					    coeffR[base++] = Eigen::Triplet<number_t>(numCams * 6 + k + rowDim * i,
-					                                              numCams * 6 + j + rowDim * i, (-1) * inv.coeff(k, j));
+					                                              numCams * 6 + j + rowDim * i,inv.coeff(k, j));
 				    }
 			    }
 		    }
