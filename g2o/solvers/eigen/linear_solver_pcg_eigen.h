@@ -134,7 +134,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       //Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
 
-
       // get Jc and Jp from preconditioned J
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
@@ -165,14 +164,27 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       xP = bP;
       //Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
+
+      // to minimize memory reallocation, use standard tmp vectors for manual aliasing. Need 2 sizes
+      Eigen::VectorXd tmpLong(J.rows());
+      Eigen::VectorXd tmpShort(xVec.rows());
+
+
+      //p =_precond_b - R_inv.transpose() *  (J.transpose() * (J * (R_inv * xVec)));
       Eigen::VectorXd p = _precond_b;
-      p.noalias() -= R_inv.transpose() *  (J.transpose() * (J * (R_inv * xVec)));
+
+      tmpShort.noalias() = R_inv * xVec;
+      tmpLong.noalias() = J * tmpShort;
+      tmpShort.noalias() = J.transpose() * tmpLong;
+      p.noalias() -= R_inv.transpose() * tmpShort;
 
       s = p;
 
       number_t beta;
 
-      Eigen::VectorXd q = J * (R_inv * p);
+      //Eigen::VectorXd q = J * (R_inv * p);
+      tmpShort.noalias() = R_inv * p;
+      Eigen::VectorXd q = J * tmpShort;
 
 
       long maxIter = J.rows();
@@ -206,11 +218,17 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	xVec.noalias() += alpha * p;
 	  	if (!isEven) {
 	  		//odd
-			sC.noalias() = (-1) * alpha * Rc.transpose() * (Jc.transpose() * q);
+			//sC.noalias() = (-1) * alpha * Rc.transpose() * (Jc.transpose() * q);
+
+		    tmpLong.noalias() = Jc.transpose() * q;
+		    sC.noalias() = (-1) * alpha * Rc.transpose() * tmpLong;
 			sP.setZero();
 	  	} else {
 	  		//even
-	  		sP.noalias() = (-1) * alpha * Rp.transpose() * (Jp.transpose() * q);
+	  		// sP.noalias() = (-1) * alpha * Rp.transpose() * (Jp.transpose() * q);
+
+	  		tmpLong.noalias() = Jp.transpose() * q;
+		    sP.noalias() = (-1) * alpha * Rp.transpose() * tmpLong;
 	  		sC.setZero();
 	  	}
 	  	//y = solver.solve(s);
@@ -220,23 +238,30 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  	beta = gamma/gamma_old;
 	  	gamma_old = gamma;
 	  	//p = s + beta * p;
-		p = beta * p;
-		p += s;
+	  	tmpShort.noalias() = beta * p;
+		p.noalias() = s + tmpShort;
 
 		if(!isEven) {
 			//odd
 			//q = beta * q + Jc * sC;
-			q = beta * q;
-			q.noalias() += Jc * (Rc * sC);
-
+			// q.noalias() += Jc * (Rc * sC);
+			tmpLong.noalias() = beta * q;
+			tmpShort.noalias() = (Rc * sC);
+			q.noalias() = tmpLong;
+			q.noalias() +=  Jc * tmpShort;
 		} else {
 			// even
 			//q = beta * q + Jp * sP;
-			q = beta * q;
-			q.noalias() += Jp * (Rp * sP);
+			// q.noalias() += Jp * (Rp * sP);
+			//q = beta * q;
+			tmpLong.noalias() = beta * q;
+			tmpShort.noalias() = (Rp * sP);
+			q.noalias() = tmpLong;
+			q.noalias() += Jp * tmpShort;
 		}
       }
-	  xVec = R_inv * xVec;
+	  tmpShort.noalias() = R_inv * xVec;
+	  xVec = tmpShort;
 
 	  //std::cout << "Time Loop: " << get_monotonic_time() - time_R << " with " << iteration << " iterations." << std::endl;
 	  //std::cout << "Time Total: " << get_monotonic_time() - time_total << std::endl;
