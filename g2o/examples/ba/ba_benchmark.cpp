@@ -74,7 +74,7 @@ int main(int argc, char** argv){
   }
 
   std::string graphFile = "";
-  int iterations = 5;
+  //int iterations = 5;
   std::string statsFile = "";
 
 
@@ -116,7 +116,7 @@ int main(int argc, char** argv){
           g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolverPCG)));
 
   g2o::OptimizationAlgorithmLevenberg* solverChol = new g2o::OptimizationAlgorithmLevenberg(
-    g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolverCholesky)));
+    g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolverCholesky)));
 
 
   optimizerPCG.setAlgorithm(solverPCG);
@@ -144,8 +144,8 @@ int main(int argc, char** argv){
   }
 
   optimizerPCG.initializeOptimization(0);
+  std::cout << "initial chi: " << optimizerPCG.chi2() << std::endl;
   optimizerPCG.optimize(iterations);
-
 
   //load graph & optimize
   if(!optimizerChol.load(graphFile.c_str(), true)) {
@@ -162,6 +162,8 @@ int main(int argc, char** argv){
   }
 
   optimizerChol.initializeOptimization(0);
+  optimizerPCG.computeActiveErrors();
+  std::cout << "initial chi: " << optimizerPCG.chi2() << std::endl;
   optimizerChol.optimize(iterations);
 
   if (statsFile!=""){
