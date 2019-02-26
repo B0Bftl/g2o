@@ -28,6 +28,7 @@
 #include "linear_solver_pcg_eigen.h"
 
 #include "g2o/core/block_solver.h"
+#include "g2o/core/jacobi_solver.h"
 #include "g2o/core/solver.h"
 #include "g2o/core/optimization_algorithm_factory.h"
 #include "g2o/core/sparse_optimizer.h"
@@ -57,10 +58,9 @@ namespace g2o {
       template<int p, int l, bool blockorder>
       std::unique_ptr<BlockSolverBase> AllocateSolverPCG()
       {
-        std::cerr << "# Using EigenSparseCholesky poseDim " << p << " landMarkDim " << l << " blockordering " << blockorder << std::endl;
-        auto linearSolver = g2o::make_unique<LinearSolverEigen<typename BlockSolverPL<p, l>::PoseMatrixType>>();
-        linearSolver->setBlockOrdering(blockorder);
-        return g2o::make_unique<BlockSolverPL<p, l>>(std::move(linearSolver));
+        std::cerr << "# Using Eigen PCG poseDim " << p << " landMarkDim " << l << " blockordering " << blockorder << std::endl;
+        auto linearSolver = g2o::make_unique<LinearSolverPCGEigen<typename JacobiSolver_6_3::PoseMatrixType>>();
+        return g2o::make_unique<JacobiSolver_6_3>(std::move(linearSolver));
       }
   }
 
@@ -77,6 +77,8 @@ namespace g2o {
       { "fix3_2_scalar_eigen", &AllocateSolver<3, 2, false> },
       { "fix6_3_scalar_eigen", &AllocateSolver<6, 3, false> },
       { "fix7_3_scalar_eigen", &AllocateSolver<7, 3, false> },
+      { "pcg6_3_eigen", &AllocateSolverPCG<6, 3, false> },
+
     };
 
     string solverName = fullSolverName.substr(3);
@@ -121,6 +123,6 @@ namespace g2o {
 
   G2O_REGISTER_OPTIMIZATION_ALGORITHM(dl_var_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("dl_var_eigen", "Dogleg: Cholesky solver using Eigen's Sparse Cholesky methods (variable blocksize)", "Eigen", false, Eigen::Dynamic, Eigen::Dynamic)));
 
-  G2O_REGISTER_OPTIMIZATION_ALGORITHM(lm_var_pcg_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("lm_var_pcg_eigen", "Levenberg: PCG solver using Eigen Library methods (variable blocksize)", "Eigen", false, Eigen::Dynamic, Eigen::Dynamic)));
+  G2O_REGISTER_OPTIMIZATION_ALGORITHM(lm_pcg6_3_eigen, new EigenSolverCreator(OptimizationAlgorithmProperty("lm_pcg6_3_eigen", "Levenberg: PCG solver using Eigen Library methods. Only suiteable for sizes 6_3", "Eigen", true, 6, 3)));
 
 }

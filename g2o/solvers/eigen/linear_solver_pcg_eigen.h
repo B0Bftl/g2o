@@ -32,6 +32,7 @@
 #include <unsupported/Eigen/SparseExtra>
 #include <Eigen/SparseCore>
 
+#include <g2o/core/batch_stats.h>
 
 #include "g2o/core/linear_solver.h"
 #include "g2o/core/batch_stats.h"
@@ -96,7 +97,9 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType bVec(b, J.cols());
 
-      //if(_writeDebug)
+
+      G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
+	    //if(_writeDebug)
       //	printMatrix(J, "Jacobi");
 
       //number_t time_total = get_monotonic_time();
@@ -104,7 +107,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::Ref<Eigen::SparseMatrix<number_t>> Jc_tmp = J.leftCols(_numCams * _colDimCam);
       Eigen::Ref<Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
-      //number_t time_R = get_monotonic_time();
+      number_t timeQR = get_monotonic_time();
       std::vector<Eigen::Triplet<number_t >> coeffR;
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
 
@@ -122,6 +125,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
+
+      globalStats->timeQrDecomposition = get_monotonic_time() - timeQR;
 
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6,_numCams * 6);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,_numPoints * 3);
