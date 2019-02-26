@@ -168,6 +168,7 @@ namespace g2o {
       for (int k = 0; k < hessian.cols(); ++k) {
       	maxDiagonal = std::max(maxDiagonal, fabs(hessian.coeff(k,k)));
       }
+      maxDiagonal = maxDiagonal / 2;
     }
 
     return _tau*maxDiagonal;
