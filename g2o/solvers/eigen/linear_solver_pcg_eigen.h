@@ -99,28 +99,47 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       //if(_writeDebug)
       //	printMatrix(J, "Jacobi");
 
-        // Compute Preconditioner R_inv, store in coeffR
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc_tmp = J.leftCols(_numCams * _colDimCam);
-      const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
+      //number_t time_total = get_monotonic_time();
+      // Compute Preconditioner R_inv, store in coeffR
+      Eigen::Ref<Eigen::SparseMatrix<number_t>> Jc_tmp = J.leftCols(_numCams * _colDimCam);
+      Eigen::Ref<Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
+      //number_t time_R = get_monotonic_time();
       std::vector<Eigen::Triplet<number_t >> coeffR;
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
+      //std::cout << "Allocating coeffR: " << get_monotonic_time() - time_R << std::endl;
 
+      //time_R = get_monotonic_time();
       computeRc_inverse(J, _numCams, coeffR);
+      //std::cout << "Rc: " << get_monotonic_time() - time_R << std::endl;
+
+      //time_R = get_monotonic_time();
       computeRp_inverse(J, _colDimPoint, _numCams, _numPoints, coeffR, lambda);
+      //std::cout << "Rp: " << get_monotonic_time() - time_R << std::endl;
 
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t >> Rc = R_inv.topRows(_numCams * 6);
+      const Eigen::Ref<const Eigen::SparseMatrix<number_t >> Rp = R_inv.bottomRows(_numPoints * 3);
+
+      //std::cout << "Time for QR total: " << get_monotonic_time() - time_total << std::endl;
+
+
+	    //time_R = get_monotonic_time();
       // apply Preconditioning with R_inv to J and b
       Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
       Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+
 
       // get Jc and Jp from preconditioned J
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = _precondJ.leftCols(_numCams * _colDimCam);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = _precondJ.rightCols(_numPoints * _colDimPoint);
 
-      // Preconditioning is complete.
+      //std::cout << "Time Applying QR: " << get_monotonic_time() - time_R << std::endl;
+      //time_R = get_monotonic_time();
+
+	    // Preconditioning is complete.
       // Initialize Algorithm.
 
       // Reference b
@@ -142,7 +161,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       xP = bP;
       //Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
       Eigen::VectorXd p = _precond_b;
-      p.noalias() -=_precondJ.transpose() * _precondJ * xVec;
+      p.noalias() -=_precondJ.transpose() * (_precondJ * xVec);
 
       s = p;
 
@@ -168,6 +187,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	  // compute Initial error
 	  number_t scaledInitialError = eta * s.dot(s);
 
+	  //std::cout << "Initialisation: " << get_monotonic_time() - time_R << std::endl;
+	  //time_R = get_monotonic_time();
 
 	  for (iteration = 0; iteration < maxIter + maxIter%2; ++iteration) {
 
@@ -212,6 +233,9 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       }
 	  xVec = R_inv * xVec;
 
+	  //std::cout << "Time Loop: " << get_monotonic_time() - time_R << " with " << iteration << " iterations." << std::endl;
+	  //std::cout << "Time Total: " << get_monotonic_time() - time_total << std::endl;
+
       return true;
     }
 
@@ -231,7 +255,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     void getMaxDegree(Eigen::SparseMatrixBase<Derived>& _matrix, int numCams) {
 
 #ifdef G2O_OPENMP
-#pragma omp parallel if(numCams > 50)
+#pragma omp parallel
     	{
 #endif
 			int max = -1;
@@ -267,16 +291,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 	        getMaxDegree(_matrix, numCams);
 
 #ifdef G2O_OPENMP
-	    # pragma omp parallel default (shared) firstprivate(base, coeffBlock) if(numCams > 10)
+	    # pragma omp parallel default (shared) firstprivate(base, coeffBlock)
 	    {
 #endif
 		    Eigen::Matrix<number_t, 6, 6> inv;
 		    Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);
 		    coeffBlock.resize(6*2*_maxDegree + 6 * 6);
+		    //number_t time;
 #ifdef G2O_OPENMP
 		#pragma omp for schedule(guided)
 #endif
 		    for (int k=0; k < numCams * 6; k += 6) {
+		    	//time = get_monotonic_time();
 			    size_t blocksize = 0;
 			    //std::vector<number_t> coeffBlock;
 			    Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix,k);
@@ -321,13 +347,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    coeffBlock[6 * (blocksize++) + 4] = itE.value();
 			    coeffBlock[6 * (blocksize++) + 5] = itF.value();
 
+			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>, 0,Eigen::Stride<1,6> >
+			        currentBlock(coeffBlock.data(), blocksize, 6, Eigen::Stride<1,6>(1,6));
+				//std::cout << "Fetching Block: " << get_monotonic_time() - time << std::endl;
+			    //time = get_monotonic_time();
 
-			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> _currentBlock(coeffBlock.data(), blocksize, 6);
-				Eigen::MatrixXd currentBlock = _currentBlock;
-
-				Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-			    qr.compute(currentBlock);
-			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
+				//Eigen::HouseholderQR<Eigen::Ref<Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>> qr(currentBlock);
+			    //qr.compute(currentBlock);
+			    inv = static_cast<Eigen::MatrixXd>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
 
 			    inv = (-1) * inv.inverse().eval();
@@ -338,6 +365,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 					    coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j,inv.coeff(i,j));
 				    }
 			    }
+			    //std::cout << "QR of block: " << get_monotonic_time() - time << std::endl;
+
 		    }
 		    //std::cout << "QR C only: " << timeSpentQR << std::endl;
 #ifdef G2O_OPENMP
@@ -354,7 +383,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
 #ifdef G2O_OPENMP
-# pragma omp parallel default (shared) if(numPoints > 50)
+# pragma omp parallel default (shared)
 	    {
 #endif
 		    int rowOffset = 0;
@@ -383,11 +412,11 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
 
 			    // initialize & compute qr in place
-			    Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-			    qr.compute(currentBlock);
+			    //Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
+			    //qr.compute(currentBlock);
 
 
-			    inv = static_cast<Eigen::MatrixXd>(qr.matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
+			    inv = static_cast<Eigen::MatrixXd>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
 
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
