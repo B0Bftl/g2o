@@ -384,14 +384,14 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 			    coeffBlock[6 * (blocksize++) + 4] = itE.value();
 			    coeffBlock[6 * (blocksize++) + 5] = itF.value();
 
-			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>, 0,Eigen::Stride<1,6> >
+			    Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, 6, Eigen::ColMajor>, 0,Eigen::Stride<1,6> >
 			        currentBlock(coeffBlock.data(), blocksize, 6, Eigen::Stride<1,6>(1,6));
 				//std::cout << "Fetching Block: " << get_monotonic_time() - time << std::endl;
 			    //time = get_monotonic_time();
 
 				//Eigen::HouseholderQR<Eigen::Ref<Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>> qr(currentBlock);
 			    //qr.compute(currentBlock);
-			    inv = static_cast<Eigen::MatrixXd>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
+			    inv = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 			    // get inverse
 
 			    inv = (-1) * inv.inverse().eval();
@@ -442,18 +442,18 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 				blockSize = matrix.col(colIndex).nonZeros() - 1;
 
 
-			    Eigen::MatrixXd currentBlock(blockSize + colDim, colDim);
+			    Eigen::Matrix<number_t, Eigen::Dynamic, 3> currentBlock(blockSize + colDim, colDim);
 			    // get current block. Row offset based on previous blocks, col offset on position in jacobian
 			    currentBlock.topRows(blockSize) = matrix.block(rowOffset, colIndex, blockSize, colDim);
 			    // attach lambda scaling
-			    currentBlock.bottomRows(colDim) = Eigen::MatrixXd::Identity(colDim, colDim) * lambda;
+			    currentBlock.bottomRows(colDim) = Eigen::Matrix<number_t,3,3>::Identity(colDim, colDim) * lambda;
 
 			    // initialize & compute qr in place
 			    //Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
 			    //qr.compute(currentBlock);
 
-
-			    inv = static_cast<Eigen::MatrixXd>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
+				Eigen::MatrixXd x;
+			    inv = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 3>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(0, 0);
 
 			    //inv = tmp.topRows(tmp.cols());
 			    // get inverse
