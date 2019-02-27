@@ -97,7 +97,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       VectorX::MapType xVec(x, J.cols());
       VectorX::ConstMapType bVec(b, J.cols());
 
-
       G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
 	    //if(_writeDebug)
       //	printMatrix(J, "Jacobi");
@@ -126,7 +125,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
       R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
-      globalStats->timeQrDecomposition = get_monotonic_time() - timeQR;
+      if(globalStats)
+        globalStats->timeQrDecomposition = get_monotonic_time() - timeQR;
 
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6,_numCams * 6);
       const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,_numPoints * 3);
@@ -267,7 +267,9 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       }
 	  tmpShort.noalias() = R_inv * xVec;
 	  xVec = tmpShort;
-
+	  if (globalStats) {
+	    globalStats->iterationsLinearSolver = iteration;
+	  }
 	  //std::cout << "Time Loop: " << get_monotonic_time() - time_R << " with " << iteration << " iterations." << std::endl;
 	  //std::cout << "Time Total: " << get_monotonic_time() - time_total << std::endl;
 
