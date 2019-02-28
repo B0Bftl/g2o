@@ -497,12 +497,12 @@ bool JacobiSolver<Traits>::buildSystem()
   // built up the current system by storing the Hessian blocks in the edges and vertices
 
   JacobianWorkspace jacobianWorkspace = _optimizer->jacobianWorkspace();
-  std::vector<Eigen::Triplet<number_t>> jacobiData;
+  std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t>>> jacobiData;
 
   //TODO: Find correct values here
   int sizeEdges = static_cast<int>(_optimizer->activeEdges().size());
   jacobiData.reserve(sizeEdges * 6 + sizeEdges * 12 + _numLandmarks + _numPoses);
-  _errVector.reserve(_numLandmarks * 3 + _numPoses * 6 + 2*sizeEdges);
+  //_errVector.reserve(_numLandmarks * 3 + _numPoses * 6 + 2*sizeEdges);
 
 
   int rowsP = 2;
@@ -553,8 +553,8 @@ bool JacobiSolver<Traits>::buildSystem()
       e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
       e->constructQuadraticFormNoHessian();
 
-      _errVector.emplace_back(e->errorData()[0]);
-      _errVector.emplace_back(e->errorData()[1]);
+      //_errVector.emplace_back(e->errorData()[0]);
+      //_errVector.emplace_back(e->errorData()[1]);
 
               //if(vi->fixed() || vj->fixed()) continue;
       ++rowCount;
@@ -665,7 +665,7 @@ bool JacobiSolver<Traits>::buildSystem()
   _jacobiFull->resize(rowDim + dimCam + dimPoints, dimCam + dimPoints);
   for (int i = 0; i < dimCam + dimPoints; ++i) {
   	jacobiData.emplace_back(rowDim + i,i,0);
-    _errVector.emplace_back(0);
+    //_errVector.emplace_back(0);
   }
   /*
   std::cout << "jacobi" << std::endl;

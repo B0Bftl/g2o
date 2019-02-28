@@ -31,7 +31,7 @@
 #include <Eigen/SparseCholesky>
 #include <unsupported/Eigen/SparseExtra>
 #include <Eigen/SparseCore>
-
+#include <Eigen/StdVector>
 #include <g2o/core/batch_stats.h>
 
 #include "g2o/core/linear_solver.h"
@@ -107,7 +107,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       Eigen::Ref<Eigen::SparseMatrix<number_t>> Jp_tmp = J.rightCols(_numPoints * _colDimPoint);
 
       number_t timeQR = get_monotonic_time();
-      std::vector<Eigen::Triplet<number_t >> coeffR;
+      std::vector<Eigen::Triplet<number_t >, Eigen::aligned_allocator<Eigen::Triplet<number_t >>> coeffR;
       coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam + _numPoints * _colDimPoint * _colDimPoint));
 
 
@@ -318,11 +318,12 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
     }
 
     template <typename Derived>
-    void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int numCams, std::vector<Eigen::Triplet<number_t>>& coeffR) {
+    void computeRc_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int numCams,
+    		std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>>& coeffR) {
 		// qr decomp
 
 	    long base = 0;
-	    std::vector<number_t> coeffBlock;
+	    std::vector<number_t, Eigen::aligned_allocator<number_t>> coeffBlock;
 
 	    if(_maxDegree == -1)
 	        getMaxDegree(_matrix, numCams);
@@ -413,7 +414,8 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
     template <typename Derived>
-    void computeRp_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int colDim, int numCams, int numPoints, std::vector<Eigen::Triplet<number_t>>& coeffR, number_t lambda) {
+    void computeRp_inverse(Eigen::SparseMatrixBase<Derived>& _matrix, int colDim, int numCams, int numPoints,
+    		std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>>& coeffR, number_t lambda) {
 
     	int rowDim = 3;
     	Eigen::SparseMatrix<number_t >& matrix = static_cast<Eigen::SparseMatrix<number_t >&> (_matrix);

@@ -105,32 +105,20 @@ int main(int argc, char** argv){
   for (int i = 0; i < rounds; ++i) {
 
     g2o::SparseOptimizer optimizerPCG;
-    g2o::SparseOptimizer optimizerChol;
 
-    optimizerPCG.setVerbose(true);
-    optimizerChol.setVerbose(true);
+    optimizerPCG.setVerbose(false);
 
     std::unique_ptr<g2o::JacobiSolver_6_3::LinearSolverType> linearSolverPCG = g2o::make_unique<g2o::LinearSolverPCGEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
-    std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolverCholesky = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3 ::PoseMatrixType>>();
 
     g2o::OptimizationAlgorithmLevenberg* solverPCG = new g2o::OptimizationAlgorithmLevenberg(
             g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolverPCG)));
 
-    g2o::OptimizationAlgorithmLevenberg* solverChol = new g2o::OptimizationAlgorithmLevenberg(
-            g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolverCholesky)));
-
-
     optimizerPCG.setAlgorithm(solverPCG);
-    optimizerChol.setAlgorithm(solverChol);
 
 
     if(statsFile.length() > 0) {
       optimizerPCG.setComputeBatchStatistics(true);
-      optimizerChol.setComputeBatchStatistics(true);
     }
-
-    optimizerChol.setVerbose(false);
-    optimizerPCG.setVerbose(false);
 
     //load graph & optimize
     if(!optimizerPCG.load(graphFile.c_str(), true)) {
@@ -149,42 +137,110 @@ int main(int argc, char** argv){
     optimizerPCG.initializeOptimization(0);
     optimizerPCG.optimize(iterations_pcg);
 
-    //load graph & optimize
-    if(!optimizerChol.load(graphFile.c_str(), true)) {
-      std::cerr << "failed to load file for PCG";
-      return -1;
-    }
-
-    for (g2o::HyperGraph::VertexIDMap::iterator it=optimizerChol.vertices().begin(); it!=optimizerChol.vertices().end(); it++){
-      g2o::OptimizableGraph::Vertex* v=static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
-      if (v->dimension() != 6) {
-        v->setMarginalized(true);
-      }
-    }
-
-    optimizerChol.initializeOptimization(0);
-    optimizerChol.optimize(iterations_chol);
 
     if (statsFile!=""){
-      cerr << "writing stats to file \"" << statsFile << "\" ... ";
       std::string pcgFile = statsFile + "_pcg.txt";
-      std::string cholFile = statsFile + "_chol.txt";
 
       ofstream foutPCG(pcgFile.c_str(), ios_base::app);
-      ofstream foutChol(cholFile.c_str(), ios_base::app);
       const g2o::BatchStatisticsContainer& bscPCG = optimizerPCG.batchStatistics();
-      const g2o::BatchStatisticsContainer& bscChol = optimizerChol.batchStatistics();
 
 
       for (size_t i=0; i<bscPCG.size(); i++)
         foutPCG << bscPCG[i] << endl;
-      cerr << "done." << endl;
 
-      for (size_t i=0; i<bscChol.size(); i++)
-        foutChol << bscChol[i] << endl;
-      cerr << "done." << endl;
     }
   }
+
+  for (int i = 0; i < rounds; ++i) {
+
+		g2o::SparseOptimizer optimizerChol;
+
+		optimizerChol.setVerbose(false);
+
+		std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolverCholesky = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3 ::PoseMatrixType>>();
+
+		g2o::OptimizationAlgorithmLevenberg* solverChol = new g2o::OptimizationAlgorithmLevenberg(
+				g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolverCholesky)));
+
+
+		optimizerChol.setAlgorithm(solverChol);
+
+		if(statsFile.length() > 0) {
+			optimizerChol.setComputeBatchStatistics(true);
+		}
+
+		//load graph & optimize
+		if(!optimizerChol.load(graphFile.c_str(), true)) {
+			std::cerr << "failed to load file for PCG";
+			return -1;
+		}
+
+		for (g2o::HyperGraph::VertexIDMap::iterator it=optimizerChol.vertices().begin(); it!=optimizerChol.vertices().end(); it++){
+			g2o::OptimizableGraph::Vertex* v=static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+			if (v->dimension() != 6) {
+				v->setMarginalized(true);
+			}
+		}
+
+		optimizerChol.initializeOptimization(0);
+		optimizerChol.optimize(iterations_chol);
+
+		if (statsFile!=""){
+			std::string cholFile = statsFile + "_chol.txt";
+
+			ofstream foutChol(cholFile.c_str(), ios_base::app);
+			const g2o::BatchStatisticsContainer& bscChol = optimizerChol.batchStatistics();
+
+			for (size_t i=0; i<bscChol.size(); i++)
+				foutChol << bscChol[i] << endl;
+		}
+	}
+
+	//variable block size
+	for (int i = 0; i < rounds; ++i) {
+
+		g2o::SparseOptimizer optimizerChol;
+
+		optimizerChol.setVerbose(false);
+
+		std::unique_ptr<g2o::BlockSolverX::LinearSolverType> linearSolverCholesky = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>>();
+
+		g2o::OptimizationAlgorithmLevenberg* solverChol = new g2o::OptimizationAlgorithmLevenberg(
+				g2o::make_unique<g2o::BlockSolverX>(std::move(linearSolverCholesky)));
+
+
+		optimizerChol.setAlgorithm(solverChol);
+
+		if(statsFile.length() > 0) {
+			optimizerChol.setComputeBatchStatistics(true);
+		}
+
+		//load graph & optimize
+		if(!optimizerChol.load(graphFile.c_str(), true)) {
+			std::cerr << "failed to load file for PCG";
+			return -1;
+		}
+
+		for (g2o::HyperGraph::VertexIDMap::iterator it=optimizerChol.vertices().begin(); it!=optimizerChol.vertices().end(); it++){
+			g2o::OptimizableGraph::Vertex* v=static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+			if (v->dimension() != 6) {
+				v->setMarginalized(true);
+			}
+		}
+
+		optimizerChol.initializeOptimization(0);
+		optimizerChol.optimize(iterations_chol);
+
+		if (statsFile!=""){
+			std::string cholFile = statsFile + "_chol_var.txt";
+
+			ofstream foutChol(cholFile.c_str(), ios_base::app);
+			const g2o::BatchStatisticsContainer& bscChol = optimizerChol.batchStatistics();
+
+			for (size_t i=0; i<bscChol.size(); i++)
+				foutChol << bscChol[i] << endl;
+		}
+	}
 
 
 }
