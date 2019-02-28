@@ -147,10 +147,12 @@ namespace g2o {
 
       virtual Eigen::SparseMatrix<number_t>& getJacobi() {return *_jacobiFull;};
 
+	  virtual void setEta(number_t eta) {_eta = eta;}
+
   protected:
       void resize(int* blockPoseIndices, int numPoseBlocks, 
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
-
+      number_t _eta;
       void deallocate();
 
       std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;

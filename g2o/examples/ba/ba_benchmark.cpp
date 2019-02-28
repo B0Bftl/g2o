@@ -63,13 +63,14 @@ int main(int argc, char** argv){
   {
     cout << endl;
     cout << "Please type: " << endl;
-    cout << "ba_benchmark [FILENAME] [ITERATIONS_PCG] [ITERATIONS_CHOL] [ROUNDS] [STATFILE]" << endl;
+    cout << "ba_benchmark [FILENAME] [ITERATIONS_PCG] [ITERATIONS_CHOL] [ROUNDS] [STATFILE] [ETA]" << endl;
     cout << endl;
     cout << "FILENAME: File to load graph from" << endl;
     cout << "ITERATIONS_PCG: number of iterations for pcg solver" << endl;
     cout << "ITERATIONS_CHOL: number of iterations for cholesky solver" << endl;
     cout << "ROUNDS: number of runs" << endl;
     cout << "STATFILE: File to save stats to" << endl;
+    cout << "ETA: adjust accuracy of pcg solver" << endl;
     cout << endl;
     cout << endl;
     exit(0);
@@ -80,6 +81,7 @@ int main(int argc, char** argv){
   int iterations_chol = 5;
   int rounds = 100;
   std::string statsFile = "";
+  number_t eta = 0.1;
 
 
   graphFile = (argv[1]);
@@ -87,14 +89,18 @@ int main(int argc, char** argv){
   iterations_chol = atoi(argv[3]);
   rounds = atoi(argv[4]);
   statsFile = argv[5];
+  if (argc > 6)
+  	eta = atof(argv[6]);
 
   cout << "Graphfile: " <<  graphFile << endl;
   cout << "Iterations PCG: "<<  iterations_pcg << endl;
   cout << "Iterations Chol: "<<  iterations_chol << endl;
   cout << "Rounds: " << rounds << endl;
   cout << "Stats File: "<<  statsFile << endl;
+  cout << "Eta : "<<  eta << endl;
 
-  g2o::DlWrapper dlTypesWrapper;
+
+	g2o::DlWrapper dlTypesWrapper;
   g2o::loadStandardTypes(dlTypesWrapper, argc, argv);
   // register all the solvers
   g2o::DlWrapper dlSolverWrapper;
@@ -109,6 +115,8 @@ int main(int argc, char** argv){
     optimizerPCG.setVerbose(false);
 
     std::unique_ptr<g2o::JacobiSolver_6_3::LinearSolverType> linearSolverPCG = g2o::make_unique<g2o::LinearSolverPCGEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+
+    linearSolverPCG->eta = eta;
 
     g2o::OptimizationAlgorithmLevenberg* solverPCG = new g2o::OptimizationAlgorithmLevenberg(
             g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolverPCG)));
@@ -134,7 +142,10 @@ int main(int argc, char** argv){
       }
     }
 
+	solverPCG->getLinSolver()->setEta(eta);
     optimizerPCG.initializeOptimization(0);
+    optimizerPCG.computeActiveErrors();
+    std::cout << "Initial chi: " << optimizerPCG.chi2() << std::endl;
     optimizerPCG.optimize(iterations_pcg);
 
 
@@ -183,6 +194,8 @@ int main(int argc, char** argv){
 		}
 
 		optimizerChol.initializeOptimization(0);
+	    optimizerChol.computeActiveErrors();
+	    std::cout << "Initial chi: " << optimizerChol.chi2() << std::endl;
 		optimizerChol.optimize(iterations_chol);
 
 		if (statsFile!=""){

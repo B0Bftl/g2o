@@ -329,7 +329,7 @@ bool JacobiSolver<Traits>::solve(){
   if (! _doSchur){
     number_t t=get_monotonic_time();
     //bool ok = _linearSolver->solve(*_jacobiFull, _x, _errVector.data(), _numPoses, _numLandmarks,2,6,3);
-	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3, _lambda);
+	  bool ok = _linearSolver->solve(*_jacobiFull, _x, _b, _numPoses, _numLandmarks,2,6,3, _lambda, _eta);
 
 	  G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {

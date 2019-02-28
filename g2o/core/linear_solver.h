@@ -73,7 +73,7 @@ class LinearSolver
         (void) _colDimCam;
         (void) _colDimPoint;
         (void) _lambda;
-	    (void) _eta;
+        (void) _eta;
         std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
         return false;
     }
@@ -100,6 +100,8 @@ class LinearSolver
     //! write a debug dump of the system matrix if it is not PSD in solve
     virtual bool writeDebug() const { return false;}
     virtual void setWriteDebug(bool) {}
+
+    number_t eta;
 };
 
 /**

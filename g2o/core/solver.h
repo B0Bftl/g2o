@@ -134,7 +134,10 @@ namespace g2o {
       //! write the hessian to disk using the specified file name
       virtual bool saveHessian(const std::string& /*fileName*/) const = 0;
 
+      virtual void setEta(number_t eta) {_eta = eta;}
+
     protected:
+      number_t _eta;
       std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
       SparseOptimizer* _optimizer;
       number_t* _x;
