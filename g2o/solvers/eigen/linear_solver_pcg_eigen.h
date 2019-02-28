@@ -153,7 +153,6 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
       const Eigen::Ref<const VectorX> bC = _precond_b.segment(0, _numCams * _colDimCam);
       const Eigen::Ref<const VectorX> bP = _precond_b.segment( _numCams * _colDimCam, _numPoints * _colDimPoint);
 
-      number_t eta = _eta;
       // Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
       VectorX::MapType xC(x, _numCams * _colDimCam);
       VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
@@ -207,7 +206,7 @@ class LinearSolverPCGEigen: public LinearSolver<MatrixType>
 
 
 	  // compute Initial error
-	  number_t scaledInitialError = eta * s.dot(s);
+	  number_t scaledInitialError = _eta * s.dot(s);
 
 	  //std::cout << "Initialisation: " << get_monotonic_time() - time_R << std::endl;
 	  //time_R = get_monotonic_time();
