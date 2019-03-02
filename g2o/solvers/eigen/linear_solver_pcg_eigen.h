@@ -176,15 +176,15 @@ namespace g2o {
 			computeRp_inverse(J, _colDimPoint, _numCams, _numPoints, _Rp_Array, lambda);
 			//std::cout << "Rp: " << get_monotonic_time() - time_R << std::endl;
 
-			Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
-			R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
+			//Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
+			//R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
 			if (globalStats)
 				globalStats->timeQrDecomposition = get_monotonic_time() - timeQR;
 
-			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6, _numCams * 6);
-			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,
-			                                                                                   _numPoints * 3);
+			//const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6, _numCams * 6);
+			//const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,
+			 //                                                                                  _numPoints * 3);
 
 			//std::cout << "Time for QR total: " << get_monotonic_time() - time_total << std::endl;
 
@@ -197,7 +197,21 @@ namespace g2o {
 			VectorX::MapType bC(_precond_b.data(), _numCams*_colDimCam);
 			VectorX::MapType bP(_precond_b.data() + _numCams * _colDimCam, _numPoints * _colDimPoint );
 
-			mult_RcT_Vec(_Rc_Array, bCVec, bC, _numCams);
+			// _precond_b = R_inv.transpose() * bVec
+			mult_RcT_Vec(bCVec, bC);
+			mult_RpT_Vec(bPVec, bP);
+
+			for (int i = 0; i<_numCams;++i)
+				printMatrix(_Rc_Array[i], "RC");
+
+			for (int i = 0; i<_numPoints;++i)
+				printMatrix(_Rp_Array[i], "RP");
+
+
+			printMatrix(bVec, "b");
+			printMatrix(_precond_b, "b _precond");
+
+
 
 
 			// get Jc and Jp from preconditioned J
@@ -220,8 +234,12 @@ namespace g2o {
 			//VectorX tmp(xVec.rows());
 
 
-			Eigen::Ref<VectorX> sC = s.segment(0, _numCams * _colDimCam);
-			Eigen::Ref<VectorX> sP = s.segment(_numCams * _colDimCam, _numPoints * _colDimPoint);
+			//Eigen::Ref<VectorX> sC = s.segment(0, _numCams * _colDimCam);
+			//Eigen::Ref<VectorX> sP = s.segment(_numCams * _colDimCam, _numPoints * _colDimPoint);
+			Eigen::Map<Eigen::VectorXd> sC(s.data(), _numCams * _colDimCam);
+			Eigen::Map<Eigen::VectorXd> sP(s.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
+
+
 
 			xC.setZero();
 
@@ -231,22 +249,40 @@ namespace g2o {
 			// to minimize memory reallocation, use standard tmp vectors for manual aliasing. Need 2 sizes
 			Eigen::VectorXd tmpLong(J.rows());
 			Eigen::VectorXd tmpShort(xVec.rows());
+			Eigen::Map<Eigen::VectorXd> tmpShortC(tmpShort.data(), _numCams * _colDimCam);
+			Eigen::Map<Eigen::VectorXd> tmpShortP(tmpShort.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
+
+			Eigen::VectorXd tmpShort_2(xVec.rows());
+			Eigen::Map<Eigen::VectorXd> tmpShortC_2(tmpShort.data(), _numCams * _colDimCam);
+			Eigen::Map<Eigen::VectorXd> tmpShortP_2(tmpShort.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
 
 			//p =_precond_b - R_inv.transpose() *  (J.transpose() * (J * (R_inv * xVec)));
 			Eigen::VectorXd p = _precond_b;
+			Eigen::Map<Eigen::VectorXd> pC(p.data(), _numCams * _colDimCam);
+			Eigen::Map<Eigen::VectorXd> pP(p.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
-			tmpShort.noalias() = R_inv * xVec;
+
+
+
+			// tmpShort.noalias() = R_inv * xVec;
+			mult_Rc_Vec(xC, tmpShortC);
+			mult_Rp_Vec(xP, tmpShortP);
 			tmpLong.noalias() = J * tmpShort;
 			tmpShort.noalias() = J.transpose() * tmpLong;
-			p.noalias() -= R_inv.transpose() * tmpShort;
+			mult_RcT_Vec(tmpShortC, tmpShortC_2);
+			mult_RpT_Vec(tmpShortP, tmpShortP_2);
+			p.noalias() -= tmpShort_2;
 
 			s = p;
 
 			number_t beta;
 
 			//Eigen::VectorXd q = J * (R_inv * p);
-			tmpShort.noalias() = R_inv * p;
+
+			//tmpShort.noalias() = R_inv * p;
+			mult_Rc_Vec(pC, tmpShortC);
+			mult_Rp_Vec(pP, tmpShortP);
 			Eigen::VectorXd q = J * tmpShort;
 
 
@@ -265,7 +301,7 @@ namespace g2o {
 
 
 			// compute Initial error
-			number_t scaledInitialError = _eta * s.dot(s);
+			number_t scaledInitialError = eta * s.dot(s);
 
 			//std::cout << "Initialisation: " << get_monotonic_time() - time_R << std::endl;
 			//time_R = get_monotonic_time();
@@ -283,15 +319,17 @@ namespace g2o {
 					//odd
 					//sC.noalias() = (-1) * alpha * Rc.transpose() * (Jc.transpose() * q);
 
-					tmpLong.noalias() = Jc.transpose() * q;
-					sC.noalias() = (-1) * alpha * Rc.transpose() * tmpLong;
+					tmpShortC.noalias() = (-1) * alpha * Jc.transpose() * q;
+					//sC.noalias() = Rc.transpose() * tmpLong;
+					mult_RcT_Vec(tmpShortC, sC);
 					sP.setZero();
 				} else {
 					//even
 					// sP.noalias() = (-1) * alpha * Rp.transpose() * (Jp.transpose() * q);
 
-					tmpLong.noalias() = Jp.transpose() * q;
-					sP.noalias() = (-1) * alpha * Rp.transpose() * tmpLong;
+					tmpShortP.noalias() = (-1) * alpha * Jp.transpose() * q;
+					// sP.noalias() =  Rp.transpose() * tmpLong;
+					mult_RpT_Vec(tmpShortP, sP);
 					sC.setZero();
 				}
 				//y = solver.solve(s);
@@ -309,21 +347,25 @@ namespace g2o {
 					//q = beta * q + Jc * sC;
 					// q.noalias() += Jc * (Rc * sC);
 					tmpLong.noalias() = beta * q;
-					tmpShort.noalias() = (Rc * sC);
+					//tmpShort.noalias() = (Rc * sC);
+					mult_Rc_Vec(sC, tmpShortC);
 					q.noalias() = tmpLong;
-					q.noalias() += Jc * tmpShort;
+					q.noalias() += Jc * tmpShortC;
 				} else {
 					// even
 					//q = beta * q + Jp * sP;
 					// q.noalias() += Jp * (Rp * sP);
 					//q = beta * q;
 					tmpLong.noalias() = beta * q;
-					tmpShort.noalias() = (Rp * sP);
+					//tmpShort.noalias() = (Rp * sP);
+					mult_Rp_Vec(sP, tmpShortP);
 					q.noalias() = tmpLong;
-					q.noalias() += Jp * tmpShort;
+					q.noalias() += Jp * tmpShortP;
 				}
 			}
-			tmpShort.noalias() = R_inv * xVec;
+			//	tmpShort.noalias() = R_inv * xVec;
+			mult_Rc_Vec(xC,tmpShortC);
+			mult_Rp_Vec(xP,tmpShortP);
 			xVec = tmpShort;
 			if (globalStats) {
 				globalStats->iterationsLinearSolver = iteration;
@@ -385,35 +427,31 @@ namespace g2o {
 #endif
 		}
 
-		inline void mult_Rc_Vec(Eigen::Matrix<number_t, 6, 6> *Rc_Array, Eigen::Map<VectorX>& src,
-		                         Eigen::Map<VectorX>& dest, int numCams) {
+		inline void mult_Rc_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 
-			for (int i = 0; i < numCams; ++i) {
-				dest.segment<6>(i * 6) = Rc_Array[i] * src.segment<6>(i * 6);
+			for (int i = 0; i < _numCams; ++i) {
+				dest.segment<6>(i * 6).noalias() = _Rc_Array[i] * src.segment<6>(i * 6);
 			}
 		}
 
-		inline void mult_Rp_Vec(Eigen::Matrix<number_t, 6, 6> *Rc_Array, Eigen::Map<VectorX>& src,
-		                         Eigen::Map<VectorX>& dest, int numPoints) {
-
-			for (int i = 0; i < numPoints; ++i) {
-				dest.segment<6>(i * 6) = _Rc_Array[i] * src.segment<6>(i * 6);
-			}
-		}
-
-		inline void mult_RcT_Vec(Eigen::Matrix<number_t, 6, 6> *Rc_Array, Eigen::Map<VectorX>& src,
-		                         Eigen::Map<VectorX>& dest, int numCams) {
-
-			for (int i = 0; i < numCams; ++i) {
-				dest.segment<6>(i * 6) = _Rc_Array[i].transpose() * src.segment<6>(i * 6);
-			}
-		}
-
-		inline void mult_RpT_Vec(Eigen::Matrix<number_t, 6, 6> *Rc_Array, Eigen::Map<VectorX>& src,
-		                         Eigen::Map<VectorX>& dest, int numPoints) {
+		inline void mult_Rp_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 
 			for (int i = 0; i < _numPoints; ++i) {
-				dest.segment<6>(i * 6) = _Rc_Array[i].transpose() * src.segment<6>(i * 6);
+				dest.segment<3>(i * 3).noalias() = _Rp_Array[i] * src.segment<3>(i * 3);
+			}
+		}
+
+		inline void mult_RcT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
+
+			for (int i = 0; i < _numCams; ++i) {
+				dest.segment<6>(i * 6).noalias() = _Rc_Array[i].transpose() * src.segment<6>(i * 6);
+			}
+		}
+
+		inline void mult_RpT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
+
+			for (int i = 0; i < _numPoints; ++i) {
+				dest.segment<3>(i * 3).noalias() = _Rp_Array[i].transpose() * src.segment<3>(i * 3);
 			}
 		}
 
@@ -446,7 +484,7 @@ namespace g2o {
 			//std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>>& coeffR) {
 			// qr decomp
 
-			long base = 0;
+			//long base = 0;
 			std::vector<number_t, Eigen::aligned_allocator<number_t>> coeffBlock;
 
 			if (_maxDegree == -1)
@@ -517,16 +555,15 @@ namespace g2o {
 				//Eigen::HouseholderQR<Eigen::Ref<Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>> qr(currentBlock);
 				//qr.compute(currentBlock);
 				//Eigen::Matrix<number_t, 6, 6>* newBlock = (Rc_block->block(k/6,k/6, false));
-				Rc_Array[k /
-				         6] = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6, 6>(
-						0, 0);
+				Rc_Array[k/6] = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>
+				(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6, 6>(0, 0);
 
 
 
 				//inv = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 				// get inverse
 
-				Rc_Array[k / 6] = (-1) * (Rc_Array[k / 6]).inverse().eval();
+				Rc_Array[k / 6] = (Rc_Array[k / 6]).inverse().eval();
 
 				/*
 				base = (k/6) * inv.cols() * inv.cols();
@@ -551,7 +588,7 @@ namespace g2o {
 		                              Eigen::Matrix<number_t, 3, 3> *Rp_Array, number_t lambda) {
 			//std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>>& coeffR, number_t lambda) {
 
-			int rowDim = 3;
+			//int rowDim = 3;
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
 
 
@@ -562,7 +599,7 @@ namespace g2o {
 			int rowOffset = 0;
 			int blockSize = 0;
 			int colIndex = 0;
-			long base = 0;
+			//long base = 0;
 			Eigen::Matrix<number_t, 3, 3> inv;
 
 #ifdef G2O_OPENMP
@@ -594,7 +631,7 @@ namespace g2o {
 
 				//inv = tmp.topRows(tmp.cols());
 				// get inverse
-				Rp_Array[i] = (-1) * (Rp_Array[i]).inverse().eval();
+				Rp_Array[i] = (Rp_Array[i]).inverse().eval();
 				/*
 				base = numCams * 36 + 9 * i;
 				for (int j = 0; j < inv.cols(); ++j) {
