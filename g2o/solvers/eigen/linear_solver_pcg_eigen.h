@@ -201,19 +201,6 @@ namespace g2o {
 			mult_RcT_Vec(bCVec, bC);
 			mult_RpT_Vec(bPVec, bP);
 
-			for (int i = 0; i<_numCams;++i)
-				printMatrix(_Rc_Array[i], "RC");
-
-			for (int i = 0; i<_numPoints;++i)
-				printMatrix(_Rp_Array[i], "RP");
-
-
-			printMatrix(bVec, "b");
-			printMatrix(_precond_b, "b _precond");
-
-
-
-
 			// get Jc and Jp from preconditioned J
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
