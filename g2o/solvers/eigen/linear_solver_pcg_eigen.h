@@ -499,7 +499,7 @@ namespace g2o {
 				getMaxDegree(_matrix, numCams);
 
 			#ifdef G2O_OPENMP
-			# pragma omp parallel default (shared) firstprivate(base, coeffBlock)
+			# pragma omp parallel default (shared) firstprivate(coeffBlock)
 						{
 			#endif
 			Eigen::Matrix<number_t, 6, 6> inv;
