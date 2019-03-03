@@ -45,52 +45,6 @@
 
 namespace g2o {
 
-	namespace internal {
-
-		template<typename MatrixType>
-		inline void pcg_axy(const MatrixType &A, const VectorX &x, int xoff, VectorX &y, int yoff) {
-			y.segment<MatrixType::RowsAtCompileTime>(yoff) = A * x.segment<MatrixType::ColsAtCompileTime>(xoff);
-		}
-
-		template<typename MatrixType>
-		inline void pcg_axpy(const MatrixType &A, const VectorX &x, int xoff, VectorX &y, int yoff) {
-			y.segment<MatrixType::RowsAtCompileTime>(yoff) += A * x.segment<MatrixType::ColsAtCompileTime>(xoff);
-		}
-
-
-		template<typename MatrixType>
-		inline void pcg_atxpy(const MatrixType &A, const VectorX &x, int xoff, VectorX &y, int yoff) {
-			y.segment<MatrixType::ColsAtCompileTime>(yoff) +=
-					A.transpose() * x.segment<MatrixType::RowsAtCompileTime>(xoff);
-		}
-
-		template void
-		pcg_axy<Eigen::Matrix<number_t, 6, 6>>(const Eigen::Matrix<number_t, 6, 6> &A, const VectorX &x, int xoff,
-		                                       VectorX &y, int yoff);
-
-		template void
-		pcg_axy<Eigen::Matrix<number_t, 3, 3>>(const Eigen::Matrix<number_t, 3, 3> &A, const VectorX &x, int xoff,
-		                                       VectorX &y, int yoff);
-
-		template void
-		pcg_axpy<Eigen::Matrix<number_t, 6, 6>>(const Eigen::Matrix<number_t, 6, 6> &A, const VectorX &x, int xoff,
-		                                        VectorX &y, int yoff);
-
-		template void
-		pcg_axpy<Eigen::Matrix<number_t, 3, 3>>(const Eigen::Matrix<number_t, 3, 3> &A, const VectorX &x, int xoff,
-		                                        VectorX &y, int yoff);
-
-		template void
-		pcg_atxpy<Eigen::Matrix<number_t, 6, 6>>(const Eigen::Matrix<number_t, 6, 6> &A, const VectorX &x, int xoff,
-		                                         VectorX &y, int yoff);
-
-		template void
-		pcg_atxpy<Eigen::Matrix<number_t, 3, 3>>(const Eigen::Matrix<number_t, 3, 3> &A, const VectorX &x, int xoff,
-		                                         VectorX &y, int yoff);
-
-	}
-
-
 /**
  * \brief linear solver which uses PCG.
  *
