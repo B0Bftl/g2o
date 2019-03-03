@@ -253,8 +253,8 @@ namespace g2o {
 			Eigen::Map<Eigen::VectorXd> tmpShortP(tmpShort.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
 			Eigen::VectorXd tmpShort_2(xVec.rows());
-			Eigen::Map<Eigen::VectorXd> tmpShortC_2(tmpShort.data(), _numCams * _colDimCam);
-			Eigen::Map<Eigen::VectorXd> tmpShortP_2(tmpShort.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
+			Eigen::Map<Eigen::VectorXd> tmpShortC_2(tmpShort_2.data(), _numCams * _colDimCam);
+			Eigen::Map<Eigen::VectorXd> tmpShortP_2(tmpShort_2.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
 
 			//p =_precond_b - R_inv.transpose() *  (J.transpose() * (J * (R_inv * xVec)));
@@ -401,55 +401,63 @@ namespace g2o {
 		template<typename Derived>
 		inline void getMaxDegree(Eigen::SparseMatrixBase<Derived> &_matrix, int numCams) {
 
-#ifdef G2O_OPENMP
-#pragma omp parallel
+			#ifdef G2O_OPENMP
+			#pragma omp parallel
 			{
-#endif
+			#endif
 			int max = -1;
-#ifdef G2O_OPENMP
-#pragma omp for schedule(static)
-#endif
+			#ifdef G2O_OPENMP
+			#pragma omp for schedule(static)
+			#endif
 			for (int i = 0; i < numCams; ++i) {
 				if (max < (_matrix.col(i * 6).nonZeros() - 1) / 2)
 					max = (_matrix.col(i * 6).nonZeros() - 1) / 2;
 			}
-#ifdef G2O_OPENMP
-#pragma omp critical
-#endif
+		#ifdef G2O_OPENMP
+		#pragma omp critical
+		#endif
 			{
 				if (_maxDegree < max) {
 					_maxDegree = max;
 				}
 			}
 
-#ifdef G2O_OPENMP
-			}
-#endif
+		#ifdef G2O_OPENMP
+		}
+		#endif
 		}
 
 		inline void mult_Rc_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
-
+#ifdef G2O_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
 			for (int i = 0; i < _numCams; ++i) {
 				dest.segment<6>(i * 6).noalias() = _Rc_Array[i] * src.segment<6>(i * 6);
 			}
 		}
 
 		inline void mult_Rp_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
-
+#ifdef G2O_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
 			for (int i = 0; i < _numPoints; ++i) {
 				dest.segment<3>(i * 3).noalias() = _Rp_Array[i] * src.segment<3>(i * 3);
 			}
 		}
 
 		inline void mult_RcT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
-
+#ifdef G2O_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
 			for (int i = 0; i < _numCams; ++i) {
 				dest.segment<6>(i * 6).noalias() = _Rc_Array[i].transpose() * src.segment<6>(i * 6);
 			}
 		}
 
 		inline void mult_RpT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
-
+#ifdef G2O_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
 			for (int i = 0; i < _numPoints; ++i) {
 				dest.segment<3>(i * 3).noalias() = _Rp_Array[i].transpose() * src.segment<3>(i * 3);
 			}
@@ -490,17 +498,17 @@ namespace g2o {
 			if (_maxDegree == -1)
 				getMaxDegree(_matrix, numCams);
 
-#ifdef G2O_OPENMP
-# pragma omp parallel default (shared) firstprivate(base, coeffBlock)
-			{
-#endif
+			#ifdef G2O_OPENMP
+			# pragma omp parallel default (shared) firstprivate(base, coeffBlock)
+						{
+			#endif
 			Eigen::Matrix<number_t, 6, 6> inv;
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
 			coeffBlock.resize(6 * 2 * _maxDegree + 6 * 6);
 			//number_t time;
-#ifdef G2O_OPENMP
-#pragma omp for schedule(guided)
-#endif
+			#ifdef G2O_OPENMP
+			#pragma omp for schedule(guided)
+			#endif
 			for (int k = 0; k < numCams * 6; k += 6) {
 				//time = get_monotonic_time();
 				size_t blocksize = 0;
@@ -577,9 +585,9 @@ namespace g2o {
 				*/
 			}
 			//std::cout << "QR C only: " << timeSpentQR << std::endl;
-#ifdef G2O_OPENMP
-			} //close parallel region
-#endif
+		#ifdef G2O_OPENMP
+					} //close parallel region
+		#endif
 		}
 
 
@@ -592,19 +600,19 @@ namespace g2o {
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
 
 
-#ifdef G2O_OPENMP
-# pragma omp parallel default (shared)
-			{
-#endif
+		#ifdef G2O_OPENMP
+		# pragma omp parallel default (shared)
+					{
+		#endif
 			int rowOffset = 0;
 			int blockSize = 0;
 			int colIndex = 0;
 			//long base = 0;
 			Eigen::Matrix<number_t, 3, 3> inv;
 
-#ifdef G2O_OPENMP
-#pragma omp for schedule(guided)
-#endif
+		#ifdef G2O_OPENMP
+		#pragma omp for schedule(guided)
+		#endif
 			for (int i = 0; i < numPoints; ++i) {
 				colIndex = i * 3 + numCams * 6;
 
@@ -675,37 +683,6 @@ namespace g2o {
 			printMatrix(denseMat, name, compact);
 		}
 
-
-		/*
-		template <typename Derived>
-		Eigen::SparseMatrix<number_t> computeR_inverse(const Eigen::SparseMatrixBase<Derived>& matrix) {
-
-			Eigen::SparseQR<Eigen::SparseMatrix<number_t>, Eigen::COLAMDOrdering<int> > qr;
-
-			qr.analyzePattern(matrix);
-			qr.factorize(matrix);
-
-			if(qr.info() != Eigen::Success)
-				std::cout << "QR Decomposition failed." << std::endl;
-
-			Eigen::SparseMatrix<number_t, Eigen::RowMajor> tmp = qr.matrixR();
-			Eigen::SparseMatrix<number_t, Eigen::ColMajor> R = tmp.topRows(tmp.cols());
-
-			Eigen::SparseLU<Eigen::SparseMatrix<number_t>> lu;
-			lu.analyzePattern(R);
-			lu.factorize(R);
-
-			if(lu.info() != Eigen::Success)
-				std::cout << "LU Decomposition failed." << std::endl;
-
-			Eigen::SparseMatrix<number_t> I(R.cols(), R.cols());
-			I.setIdentity();
-
-			Eigen::SparseMatrix<number_t> R_inv =  lu.solve(I);
-
-			return R_inv;
-		}
-		*/
 	};
 }
 #endif
