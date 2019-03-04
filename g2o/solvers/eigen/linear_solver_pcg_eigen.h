@@ -112,9 +112,9 @@ namespace g2o {
 			// Compute Preconditioner R_inv, store in coeffR
 			number_t timeQR = get_monotonic_time();
 
-			std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>> coeffR;
-			coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam +
-			                                         _numPoints * _colDimPoint * _colDimPoint));
+			//std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>> coeffR;
+			//coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam +
+			//                                        _numPoints * _colDimPoint * _colDimPoint));
 
 			_Rc_Array = new Eigen::Matrix<number_t, 6, 6>[_numCams];
 			_Rp_Array = new Eigen::Matrix<number_t, 3, 3>[_numPoints];
@@ -348,7 +348,7 @@ namespace g2o {
 			#endif
 			int max = -1;
 			#ifdef G2O_OPENMP
-			#pragma omp for schedule(static)
+			#pragma omp for schedule(runtime)
 			#endif
 			for (int i = 0; i < numCams; ++i) {
 				if (max < (_matrix.col(i * 6).nonZeros() - 1) / 2)
@@ -370,7 +370,7 @@ namespace g2o {
 
 		inline void mult_Rc_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(runtime)
 #endif
 			for (int i = 0; i < _numCams; ++i) {
 				dest.segment<6>(i * 6).noalias() = _Rc_Array[i] * src.segment<6>(i * 6);
@@ -379,7 +379,7 @@ namespace g2o {
 
 		inline void mult_Rp_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(runtime)
 #endif
 			for (int i = 0; i < _numPoints; ++i) {
 				dest.segment<3>(i * 3).noalias() = _Rp_Array[i] * src.segment<3>(i * 3);
@@ -388,7 +388,7 @@ namespace g2o {
 
 		inline void mult_RcT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(runtime)
 #endif
 			for (int i = 0; i < _numCams; ++i) {
 				dest.segment<6>(i * 6).noalias() = _Rc_Array[i].transpose() * src.segment<6>(i * 6);
@@ -397,7 +397,7 @@ namespace g2o {
 
 		inline void mult_RpT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(runtime)
 #endif
 			for (int i = 0; i < _numPoints; ++i) {
 				dest.segment<3>(i * 3).noalias() = _Rp_Array[i].transpose() * src.segment<3>(i * 3);
@@ -443,12 +443,12 @@ namespace g2o {
 			# pragma omp parallel default (shared) firstprivate(coeffBlock)
 						{
 			#endif
-			Eigen::Matrix<number_t, 6, 6> inv;
+			//Eigen::Matrix<number_t, 6, 6> inv;
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
 			coeffBlock.resize(6 * 2 * _maxDegree + 6 * 6);
 			//number_t time;
 			#ifdef G2O_OPENMP
-			#pragma omp for schedule(guided)
+			#pragma omp for schedule(runtime)
 			#endif
 			for (int k = 0; k < numCams * 6; k += 6) {
 				//time = get_monotonic_time();
@@ -549,10 +549,10 @@ namespace g2o {
 			int blockSize = 0;
 			int colIndex = 0;
 			//long base = 0;
-			Eigen::Matrix<number_t, 3, 3> inv;
+			//Eigen::Matrix<number_t, 3, 3> inv;
 
 		#ifdef G2O_OPENMP
-		#pragma omp for schedule(guided)
+		#pragma omp for schedule(runtime)
 		#endif
 			for (int i = 0; i < numPoints; ++i) {
 				colIndex = i * 3 + numCams * 6;

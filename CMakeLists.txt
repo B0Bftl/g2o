@@ -257,7 +257,7 @@ endif()
 
 # Compiler specific options for gcc
 if(CMAKE_COMPILER_IS_GNUCXX)
-  option (BUILD_WITH_MARCH_NATIVE "Build with \"-march native\"" OFF)
+  option (BUILD_WITH_MARCH_NATIVE "Build with \"-march native\"" ON)
   message(STATUS "Compiling with GCC")
 
   # Generic settings for optimisation
