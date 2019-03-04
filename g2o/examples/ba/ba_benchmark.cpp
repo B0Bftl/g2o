@@ -242,6 +242,8 @@ int main(int argc, char** argv){
 		}
 
 		optimizerChol.initializeOptimization(0);
+		optimizerChol.computeActiveErrors();
+		std::cout << "Initial chi: " << optimizerChol.chi2() << std::endl;
 		optimizerChol.optimize(iterations_chol);
 
 		if (statsFile!=""){
