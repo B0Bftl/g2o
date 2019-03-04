@@ -561,34 +561,36 @@ bool JacobiSolver<Traits>::buildSystem()
       // We only
 
       data = jacobianWorkspace.workspaceForVertex(0);
+      number_t info = sqrt(e->informationData()[0]);
+
       if(vi->hessianIndex() >= 0){
         if(vi->marginalized()) {
           // Point
           // We know that we are sorted
           offsetRow = rowCount * rowsP;
           offsetCol = ((_numPoses) * colsC) + ((vi->hessianIndex() - _numPoses) * colsP);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5] * info);
         } else {
           // Camera
           offsetRow = rowCount * rowsC;
           offsetCol = (vi->hessianIndex()) * colsC;
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-          jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-          jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9] * info);
+          jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10] * info);
+          jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11] * info);
         }
       }
 
@@ -600,28 +602,28 @@ bool JacobiSolver<Traits>::buildSystem()
           // We know that we are sorted
             offsetRow = rowCount * rowsP;
             offsetCol = ((_numPoses) * colsC) + ((vj->hessianIndex() - _numPoses) * colsP);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5] * info);
         } else {
           // Camera
             offsetRow = rowCount * rowsC;
             offsetCol = (vj->hessianIndex()) * colsC;
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9]);
-            jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10]);
-            jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11]);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 0,data[0] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 0,data[1] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 1,data[2] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 1,data[3] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 2,data[4] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 2,data[5] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 3,data[6] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 3,data[7] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 4,data[8] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 4,data[9] * info);
+            jacobiData.emplace_back(offsetRow + 0, offsetCol + 5,data[10] * info);
+            jacobiData.emplace_back(offsetRow + 1, offsetCol + 5,data[11] * info);
         }
       }
 
