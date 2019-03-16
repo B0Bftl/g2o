@@ -105,85 +105,51 @@ namespace g2o {
 
 
 			G2OBatchStatistics *globalStats = G2OBatchStatistics::globalStats();
-			//if(_writeDebug)
-			//	printMatrix(J, "Jacobi");
-
-			//number_t time_total = get_monotonic_time();
-			// Compute Preconditioner R_inv, store in coeffR
 			number_t timeQR = get_monotonic_time();
 
-			//std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>> coeffR;
-			//coeffR.resize(static_cast<unsigned long>(_numCams * _colDimCam * _colDimCam +
-			//                                        _numPoints * _colDimPoint * _colDimPoint));
-
+			// Blocks of preconditioner R^-1.
 			_Rc_Array = new Eigen::Matrix<number_t, 6, 6>[_numCams];
 			_Rp_Array = new Eigen::Matrix<number_t, 3, 3>[_numPoints];
 
 
-			//std::cout << "Allocating coeffR: " << get_monotonic_time() - time_R << std::endl;
-
-			//time_R = get_monotonic_time();
+			// Compute preconditioner and store it in matrix array
 			computeRc_inverse(J, _numCams, _Rc_Array);
-			//std::cout << "Rc: " << get_monotonic_time() - time_R << std::endl;
-
-			//time_R = get_monotonic_time();
 			computeRp_inverse(J, _colDimPoint, _numCams, _numPoints, _Rp_Array, lambda);
-			//std::cout << "Rp: " << get_monotonic_time() - time_R << std::endl;
-
-			//Eigen::SparseMatrix<number_t> R_inv(J.cols(), J.cols());
-			//R_inv.setFromTriplets(coeffR.begin(), coeffR.end());
 
 			if (globalStats)
 				globalStats->timeQrDecomposition = get_monotonic_time() - timeQR;
 
-			//const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rc = R_inv.topLeftCorner(_numCams * 6, _numCams * 6);
-			//const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Rp = R_inv.bottomRightCorner(_numPoints * 3,
-			 //                                                                                  _numPoints * 3);
+			//Computation of Preconditioner complete
+			// Initialize Algorithm.
 
-			//std::cout << "Time for QR total: " << get_monotonic_time() - time_total << std::endl;
-
-
-			//time_R = get_monotonic_time();
-			// apply Preconditioning with R_inv to J and b
-			//Eigen::SparseMatrix<number_t> _precondJ = J * R_inv;
-			//Eigen::VectorXd _precond_b = R_inv.transpose() * bVec;
+			// Reference b
 			Eigen::VectorXd _precond_b(bVec.rows());
+			// Map Vector b in Camera and Position Part.
 			VectorX::MapType bC(_precond_b.data(), _numCams*_colDimCam);
 			VectorX::MapType bP(_precond_b.data() + _numCams * _colDimCam, _numPoints * _colDimPoint );
 
+			// apply Preconditioning with R_inv to b
 			// _precond_b = R_inv.transpose() * bVec
 			mult_RcT_Vec(bCVec, bC);
 			mult_RpT_Vec(bPVec, bP);
 
-			// get Jc and Jp from preconditioned J
+			// get Jc and Jp from J
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
-
-			//std::cout << "Time Applying QR: " << get_monotonic_time() - time_R << std::endl;
-			//time_R = get_monotonic_time();
-
-			// Preconditioning is complete.
-			// Initialize Algorithm.
-
-			// Reference b
+.
 
 			// Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
 			VectorX::MapType xC(x, _numCams * _colDimCam);
 			VectorX::MapType xP(x + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
 			VectorX s(xVec.rows());
-			//VectorX tmp(xVec.rows());
 
-
-			//Eigen::Ref<VectorX> sC = s.segment(0, _numCams * _colDimCam);
-			//Eigen::Ref<VectorX> sP = s.segment(_numCams * _colDimCam, _numPoints * _colDimPoint);
 			Eigen::Map<Eigen::VectorXd> sC(s.data(), _numCams * _colDimCam);
 			Eigen::Map<Eigen::VectorXd> sP(s.data() + _numCams * _colDimCam, _numPoints * _colDimPoint);
 
 
 
 			xC.setZero();
-
 			xP = bP;
 			//Eigen::VectorXd p = _precond_b - _precondJ.transpose() * (_precondJ * xVec);
 
@@ -232,23 +198,17 @@ namespace g2o {
 			long iteration = 0;
 			bool isEven = false;
 
-			//std::cout << "preptime " <<  get_monotonic_time() - time << std::endl;
-
 			number_t alpha;
-
 
 			number_t gamma = s.dot(s);
 			number_t gamma_old = gamma;
 
-
 			// compute Initial error
 			number_t scaledInitialError = eta * s.dot(s);
 
-			//std::cout << "Initialisation: " << get_monotonic_time() - time_R << std::endl;
-			//time_R = get_monotonic_time();
-
+			// Initialization complete, start iterating
 			for (iteration = 0; iteration < maxIter + maxIter % 2; ++iteration) {
-
+				// check if error small enough according to eta
 				if (gamma < scaledInitialError)
 					break;
 
@@ -259,24 +219,18 @@ namespace g2o {
 				if (!isEven) {
 					//odd
 					//sC.noalias() = (-1) * alpha * Rc.transpose() * (Jc.transpose() * q);
-
 					tmpShortC.noalias() = (-1) * alpha * Jc.transpose() * q;
-					//sC.noalias() = Rc.transpose() * tmpLong;
 					mult_RcT_Vec(tmpShortC, sC);
 					sP.setZero();
 				} else {
 					//even
 					// sP.noalias() = (-1) * alpha * Rp.transpose() * (Jp.transpose() * q);
-
 					tmpShortP.noalias() = (-1) * alpha * Jp.transpose() * q;
-					// sP.noalias() =  Rp.transpose() * tmpLong;
 					mult_RpT_Vec(tmpShortP, sP);
 					sC.setZero();
 				}
-				//y = solver.solve(s);
 
 				gamma = s.dot(s);
-				//gamma = s.dot(y);
 				beta = gamma / gamma_old;
 				gamma_old = gamma;
 				//p = s + beta * p;
@@ -288,7 +242,6 @@ namespace g2o {
 					//q = beta * q + Jc * sC;
 					// q.noalias() += Jc * (Rc * sC);
 					tmpLong.noalias() = beta * q;
-					//tmpShort.noalias() = (Rc * sC);
 					mult_Rc_Vec(sC, tmpShortC);
 					q.noalias() = tmpLong;
 					q.noalias() += Jc * tmpShortC;
@@ -298,12 +251,12 @@ namespace g2o {
 					// q.noalias() += Jp * (Rp * sP);
 					//q = beta * q;
 					tmpLong.noalias() = beta * q;
-					//tmpShort.noalias() = (Rp * sP);
 					mult_Rp_Vec(sP, tmpShortP);
 					q.noalias() = tmpLong;
 					q.noalias() += Jp * tmpShortP;
 				}
 			}
+			// Retreive correct x from transformed x
 			//	tmpShort.noalias() = R_inv * xVec;
 			mult_Rc_Vec(xC,tmpShortC);
 			mult_Rp_Vec(xP,tmpShortP);
@@ -311,8 +264,7 @@ namespace g2o {
 			if (globalStats) {
 				globalStats->iterationsLinearSolver = iteration;
 			}
-			//std::cout << "Time Loop: " << get_monotonic_time() - time_R << " with " << iteration << " iterations." << std::endl;
-			//std::cout << "Time Total: " << get_monotonic_time() - time_total << std::endl;
+
 			delete[] _Rc_Array;
 			delete[] _Rp_Array;
 			return true;
@@ -339,6 +291,12 @@ namespace g2o {
 		Eigen::Matrix<number_t, 6, 6> *_Rc_Array;
 		Eigen::Matrix<number_t, 3, 3> *_Rp_Array;
 
+		/**
+		 * Computes maximum degree to know required memory size during computation of Rc
+		 * @tparam Derived
+		 * @param _matrix
+		 * @param numCams
+		 */
 		template<typename Derived>
 		inline void getMaxDegree(Eigen::SparseMatrixBase<Derived> &_matrix, int numCams) {
 
@@ -368,6 +326,13 @@ namespace g2o {
 		#endif
 		}
 
+		/**
+		 *  Carries out the multiplication dest = Rc * src
+		 * 	Rc must have been computed beforehand
+		 *  IMPORTANT: UNDEFINED BEHAVIOUR IF src AND dest POINT TO SAME MEMORY
+		 * @param src	Vector to be multiplied with
+		 * @param dest	Vector to store the result
+		 */
 		inline void mult_Rc_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
 #pragma omp parallel for schedule(runtime)
@@ -377,6 +342,13 @@ namespace g2o {
 			}
 		}
 
+		/**
+		 *  Carries out the multiplication dest = Rp * src
+		 * 	Rp must have been computed beforehand
+		 *  IMPORTANT: UNDEFINED BEHAVIOUR IF src AND dest POINT TO SAME MEMORY
+		 * @param src	Vector to be multiplied with
+		 * @param dest	Vector to store the result
+		 */
 		inline void mult_Rp_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
 #pragma omp parallel for schedule(runtime)
@@ -386,6 +358,13 @@ namespace g2o {
 			}
 		}
 
+		/**
+		 *  Carries out the multiplication dest = Rc^T * src
+		 * 	Rc must have been computed beforehand
+		 *  IMPORTANT: UNDEFINED BEHAVIOUR IF src AND dest POINT TO SAME MEMORY
+		 * @param src	Vector to be multiplied with
+		 * @param dest	Vector to store the result
+		 */
 		inline void mult_RcT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
 #pragma omp parallel for schedule(runtime)
@@ -395,6 +374,13 @@ namespace g2o {
 			}
 		}
 
+		/**
+		 *  Carries out the multiplication dest = Rp^T * src
+		 * 	Rp must have been computed beforehand
+		 *  IMPORTANT: UNDEFINED BEHAVIOUR IF src AND dest POINT TO SAME MEMORY
+		 * @param src	Vector to be multiplied with
+		 * @param dest	Vector to store the result
+		 */
 		inline void mult_RpT_Vec(Eigen::Map<VectorX>& src, Eigen::Map<VectorX>& dest) {
 #ifdef G2O_OPENMP
 #pragma omp parallel for schedule(runtime)
@@ -404,29 +390,13 @@ namespace g2o {
 			}
 		}
 
-		/*
-		inline void mult_RcT_Vec(Eigen::Matrix<number_t, 6, 6> *Rc_Array, number_t* src,
-		                         number_t* dest, int numCams) {
-
-			Eigen::Map<VectorX> srcVec(src, numCams * 6);
-			Eigen::Map<VectorX> destVec(dest, numCams * 6);
-
-			for (int i = 0; i < numCams; ++i) {
-				Eigen::Matrix<number_t, 6, 6>* mat = &Rc_Array[i];
-				destVec.segment<6>(i * 6) = (*mat) * srcVec.segment<6>(i * 6);
-			}
-		}
-
-		inline void	mult_RpT_Vec(Eigen::Matrix<number_t, 3, 3> *Rc_Array,number_t* src,
-		                            number_t* dest, int numPoints) {
-			Eigen::Map<VectorX> srcVec(src, numPoints * 3);
-			Eigen::Map<VectorX> destVec(dest, numPoints * 3);
-
-			for (int i = 0; i < numPoints; ++i) {
-				destVec.segment<3>(i * 3) = Rc_Array[i].transpose() * srcVec.segment<3>(i * 3);
-			}
-		}
-		*/
+		/**
+		 * Computes preconditioner Rc and stores it in Rc_Array
+		 * @tparam Derived	matrix type
+		 * @param _matrix	Jacobi J
+		 * @param numCams	number of cameras
+		 * @param Rc_Array	Pointer to initialized array to store result
+		 */
 		template<typename Derived>
 		inline void computeRc_inverse(Eigen::SparseMatrixBase<Derived> &_matrix, int numCams,
 		                              Eigen::Matrix<number_t, 6, 6> *Rc_Array) {
@@ -443,17 +413,14 @@ namespace g2o {
 			# pragma omp parallel default (shared) firstprivate(coeffBlock)
 						{
 			#endif
-			//Eigen::Matrix<number_t, 6, 6> inv;
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
 			coeffBlock.resize(6 * 2 * _maxDegree + 6 * 6);
-			//number_t time;
 			#ifdef G2O_OPENMP
 			#pragma omp for schedule(runtime)
 			#endif
 			for (int k = 0; k < numCams * 6; k += 6) {
-				//time = get_monotonic_time();
+				// Fetch current block. store coefficients
 				size_t blocksize = 0;
-				//std::vector<number_t> coeffBlock;
 				Eigen::SparseMatrix<number_t>::InnerIterator itA(matrix, k);
 				Eigen::SparseMatrix<number_t>::InnerIterator itB(matrix, k + 1);
 				Eigen::SparseMatrix<number_t>::InnerIterator itC(matrix, k + 2);
@@ -496,50 +463,40 @@ namespace g2o {
 				coeffBlock[6 * (blocksize++) + 4] = itE.value();
 				coeffBlock[6 * (blocksize++) + 5] = itF.value();
 
+				// map coefficients to dense matrix
 				Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, 6, Eigen::ColMajor>, 0, Eigen::Stride<1, 6> >
 						currentBlock(coeffBlock.data(), blocksize, 6, Eigen::Stride<1, 6>(1, 6));
-				//std::cout << "Fetching Block: " << get_monotonic_time() - time << std::endl;
-				//time = get_monotonic_time();
 
-				//Eigen::HouseholderQR<Eigen::Ref<Eigen::Map<Eigen::Matrix<number_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>> qr(currentBlock);
-				//qr.compute(currentBlock);
-				//Eigen::Matrix<number_t, 6, 6>* newBlock = (Rc_block->block(k/6,k/6, false));
+				// compute qr of dense matrix and retreive R, write into Array
 				Rc_Array[k/6] = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>
 				(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6, 6>(0, 0);
 
-
-
-				//inv = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 6>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<6,6>(0,0);
 				// get inverse
-
 				Rc_Array[k / 6] = (Rc_Array[k / 6]).inverse().eval();
 
-				/*
-				base = (k/6) * inv.cols() * inv.cols();
-
-				for (int j = 0; j < inv.cols();++j) {
-					for (int i = 0; i < inv.cols();++i) {
-						coeffR[base++] = Eigen::Triplet<number_t>(k + i, k + j,inv.coeff(i,j));
-					}
-				}
-				//std::cout << "QR of block: " << get_monotonic_time() - time << std::endl;
-				*/
 			}
-			//std::cout << "QR C only: " << timeSpentQR << std::endl;
 		#ifdef G2O_OPENMP
 					} //close parallel region
 		#endif
 		}
 
-
+		/**
+		 *
+		 * Computes preconditioner Rp and stores it in Rp_Array
+		 *
+		 * @tparam Derived matrix type
+		 * @param _matrix	Jacobi
+		 * @param colDim	colDimension of p
+		 * @param numCams	number of cams
+		 * @param numPoints	number of points
+		 * @param Rp_Array	pointer to initialized array to store Rp
+		 * @param lambda	Lambda of LM algorithm
+		 */
 		template<typename Derived>
 		inline void computeRp_inverse(Eigen::SparseMatrixBase<Derived> &_matrix, int colDim, int numCams, int numPoints,
 		                              Eigen::Matrix<number_t, 3, 3> *Rp_Array, number_t lambda) {
-			//std::vector<Eigen::Triplet<number_t>, Eigen::aligned_allocator<Eigen::Triplet<number_t >>>& coeffR, number_t lambda) {
 
-			//int rowDim = 3;
 			Eigen::SparseMatrix<number_t> &matrix = static_cast<Eigen::SparseMatrix<number_t> &> (_matrix);
-
 
 		#ifdef G2O_OPENMP
 		# pragma omp parallel default (shared)
@@ -548,8 +505,6 @@ namespace g2o {
 			int rowOffset = 0;
 			int blockSize = 0;
 			int colIndex = 0;
-			//long base = 0;
-			//Eigen::Matrix<number_t, 3, 3> inv;
 
 		#ifdef G2O_OPENMP
 		#pragma omp for schedule(runtime)
@@ -563,33 +518,19 @@ namespace g2o {
 				rowOffset = iterRow.row();
 				blockSize = matrix.col(colIndex).nonZeros() - 1;
 
-
 				Eigen::Matrix<number_t, Eigen::Dynamic, 3> currentBlock(blockSize + colDim, colDim);
 				// get current block. Row offset based on previous blocks, col offset on position in jacobian
 				currentBlock.topRows(blockSize) = matrix.block(rowOffset, colIndex, blockSize, colDim);
 				// attach lambda scaling
 				currentBlock.bottomRows(colDim) = Eigen::Matrix<number_t, 3, 3>::Identity(colDim, colDim) * lambda;
 
-				// initialize & compute qr in place
-				//Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(currentBlock);
-				//qr.compute(currentBlock);
-
-				//Eigen::Matrix<number_t, 3, 3>* newBlock = Rp_block->block(i,i, false);
+				// initialize & compute qr in place, store in array
 				Rp_Array[i] = static_cast<Eigen::Matrix<number_t, Eigen::Dynamic, 3>>(currentBlock.householderQr().matrixQR().triangularView<Eigen::Upper>()).block<3, 3>(
 						0, 0);
 
-				//inv = tmp.topRows(tmp.cols());
 				// get inverse
 				Rp_Array[i] = (Rp_Array[i]).inverse().eval();
-				/*
-				base = numCams * 36 + 9 * i;
-				for (int j = 0; j < inv.cols(); ++j) {
-					for (int k = 0; k < inv.cols(); ++k) {
-						coeffR[base++] = Eigen::Triplet<number_t>(numCams * 6 + k + rowDim * i,
-																  numCams * 6 + j + rowDim * i,inv.coeff(k, j));
-					}
-				}
-				 */
+
 			}
 
 #ifdef G2O_OPENMP
@@ -598,6 +539,13 @@ namespace g2o {
 
 		}
 
+		/**
+		 * Prints given dense matrix. For debug purposes
+		 * @tparam Derived
+		 * @param matrix
+		 * @param name
+		 * @param compact
+		 */
 		template<typename Derived>
 		void printMatrix(const Eigen::MatrixBase<Derived> &matrix, std::string name, bool compact = true) {
 			std::cout << "printing " << name << std::endl << "----------------------------" << std::endl;
@@ -618,6 +566,13 @@ namespace g2o {
 			std::cout << "----------------------------" << std::endl << std::endl;
 		}
 
+		/**
+		 * prints given sparse Matrix. For debug purposes
+		 * @tparam Derived
+		 * @param matrix
+		 * @param name
+		 * @param compact
+		 */
 		template<typename Derived>
 		void printMatrix(const Eigen::SparseMatrixBase<Derived> &matrix, std::string name, bool compact = true) {
 			Eigen::MatrixXd denseMat = matrix;
