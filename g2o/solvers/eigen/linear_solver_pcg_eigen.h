@@ -136,7 +136,6 @@ namespace g2o {
 			// get Jc and Jp from J
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jc = J.leftCols(_numCams * _colDimCam);
 			const Eigen::Ref<const Eigen::SparseMatrix<number_t>> Jp = J.rightCols(_numPoints * _colDimPoint);
-.
 
 			// Map Vector x in Camera and Position Part. Writing to xC/xP writes to x
 			VectorX::MapType xC(x, _numCams * _colDimCam);
