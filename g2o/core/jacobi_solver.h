@@ -1,3 +1,6 @@
+//
+// created on basis of block_solver.h by Lukas Schneider, 18.03.2019.
+//
 // g2o - General Graph Optimization
 // Copyright (C) 2011 R. Kuemmerle, G. Grisetti, W. Burgard
 // All rights reserved.
