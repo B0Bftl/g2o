@@ -216,6 +216,10 @@ namespace g2o{
     clearIndexMapping();
     _activeVertices.clear();
     _activeVertices.reserve(vset.size());
+
+    for (size_t i = 0; i < _activeEdges.size();++i)
+      _activeEdges[i]->setActive(false);
+
     _activeEdges.clear();
     set<Edge*> auxEdgeSet; // temporary structure to avoid duplicates
     for (HyperGraph::VertexSet::iterator it=vset.begin(); it!=vset.end(); ++it){
@@ -263,7 +267,10 @@ namespace g2o{
 
     _activeEdges.reserve(auxEdgeSet.size());
     for (set<Edge*>::iterator it = auxEdgeSet.begin(); it != auxEdgeSet.end(); ++it)
+    {
       _activeEdges.push_back(*it);
+      (*it)->setActive(true);
+    }
 
     sortVectorContainers();
     bool indexMappingStatus = buildIndexMapping(_activeVertices);
@@ -283,11 +290,12 @@ namespace g2o{
     for (HyperGraph::EdgeSet::iterator it=eset.begin(); it!=eset.end(); ++it){
       OptimizableGraph::Edge* e=(OptimizableGraph::Edge*)(*it);
       if (e->numUndefinedVertices())
-	continue;
+	    continue;
       for (vector<HyperGraph::Vertex*>::const_iterator vit = e->vertices().begin(); vit != e->vertices().end(); ++vit) {
         auxVertexSet.insert(static_cast<OptimizableGraph::Vertex*>(*vit));
       }
       _activeEdges.push_back(reinterpret_cast<OptimizableGraph::Edge*>(*it));
+      (*it)->setActive(true);
     }
 
     _activeVertices.reserve(auxVertexSet.size());
@@ -462,7 +470,10 @@ namespace g2o{
     _activeEdges.reserve(_activeEdges.size() + eset.size());
     for (HyperGraph::EdgeSet::iterator it = eset.begin(); it != eset.end(); ++it) {
       OptimizableGraph::Edge* e = static_cast<OptimizableGraph::Edge*>(*it);
-      if (!e->allVerticesFixed()) _activeEdges.push_back(e);
+      if (!e->allVerticesFixed()) {
+        _activeEdges.push_back(e);
+        e->setActive(true);
+      }
     }
     
     // update the index mapping

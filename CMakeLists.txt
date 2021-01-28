@@ -20,6 +20,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 # postfix, based on type
 set(CMAKE_DEBUG_POSTFIX "_d" CACHE STRING "postfix applied to debug build of libraries")
+
 set(CMAKE_RELEASE_POSTFIX "" CACHE STRING "postfix applied to release build of libraries")
 set(CMAKE_RELWITHDEBINFO_POSTFIX "_rd" CACHE STRING "postfix applied to release-with-debug-information libraries")
 set(CMAKE_MINSIZEREL_POSTFIX "_s" CACHE STRING "postfix applied to minimium-size-build libraries")
@@ -142,12 +143,14 @@ endif()
 # Eigen library parallelise itself, though, presumably due to performance issues
 # OPENMP is experimental. We experienced some slowdown with it
 set(G2O_USE_OPENMP OFF CACHE BOOL "Build g2o with OpenMP support (EXPERIMENTAL)")
+set(G2O_USE_OPENMP ON)
 if(G2O_USE_OPENMP)
   find_package(OpenMP)
   if(OPENMP_FOUND)
     set (G2O_OPENMP 1)
     set(g2o_C_FLAGS "${g2o_C_FLAGS} ${OpenMP_C_FLAGS}")
     set(g2o_CXX_FLAGS "${g2o_CXX_FLAGS} -DEIGEN_DONT_PARALLELIZE ${OpenMP_CXX_FLAGS}")
+    #set(g2o_CXX_FLAGS "${g2o_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     message(STATUS "Compiling with OpenMP support")
   endif(OPENMP_FOUND)
 endif(G2O_USE_OPENMP)
@@ -254,7 +257,7 @@ endif()
 
 # Compiler specific options for gcc
 if(CMAKE_COMPILER_IS_GNUCXX)
-  option (BUILD_WITH_MARCH_NATIVE "Build with \"-march native\"" OFF)
+  option (BUILD_WITH_MARCH_NATIVE "Build with \"-march native\"" ON)
   message(STATUS "Compiling with GCC")
 
   # Generic settings for optimisation
@@ -275,10 +278,13 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     #set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
   #endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   # Linux
-  if(BUILD_WITH_MARCH_NATIVE AND NOT "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "arm" AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  #if(BUILD_WITH_MARCH_NATIVE AND NOT "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "arm" AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  if(BUILD_WITH_MARCH_NATIVE AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
+    message(STATUS "Compiling with -march-native")
   endif()
+
   # activate warnings !!!
   set(g2o_C_FLAGS "${g2o_C_FLAGS} -Wall -W")
   set(g2o_CXX_FLAGS "${g2o_CXX_FLAGS} -Wall -W")

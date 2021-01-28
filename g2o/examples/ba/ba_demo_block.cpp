@@ -44,7 +44,6 @@
 #include "g2o/types/sba/types_six_dof_expmap.h"
 //#include "g2o/math_groups/se3quat.h"
 #include "g2o/solvers/structure_only/structure_only_solver.h"
-#include <g2o/core/batch_stats.h>
 
 using namespace Eigen;
 using namespace std;
@@ -133,6 +132,7 @@ int main(int argc, const char* argv[]){
 	if (argc>7){
 		numPoints = atoi(argv[7]);
 	}
+
   int iterations = 10;
   if (argc>8){
     iterations = atoi(argv[8]);
@@ -148,37 +148,35 @@ int main(int argc, const char* argv[]){
   cout << "ROBUST_KERNEL: " << ROBUST_KERNEL << endl;
   cout << "STRUCTURE_ONLY: " << STRUCTURE_ONLY<< endl;
   cout << "LinSolver: "<<  linSolver << endl;
-  cout << "Cameras: "<<  numCameras << endl;
-  cout << "Points: "<<  numPoints << endl;
+	cout << "Cameras: "<<  numCameras << endl;
+	cout << "Points: "<<  numPoints << endl;
   cout << "Iterations: "<<  iterations << endl;
   cout << "Stats File: "<<  statsFilename << endl;
 
 
-
-
-
   g2o::SparseOptimizer optimizer;
   optimizer.setVerbose(false);
-  std::unique_ptr<g2o::JacobiSolver_6_3 ::LinearSolverType> linearSolver;
+  std::unique_ptr<g2o::BlockSolver_6_3 ::LinearSolverType> linearSolver;
   if (linSolver == 0) {
-    linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
   } else if(linSolver == 1) {
-    linearSolver = g2o::make_unique<g2o::LinearSolverEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
   } else if(linSolver == 2) {
-    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverCholmod<g2o::BlockSolver_6_3::PoseMatrixType>>();
   } else if(linSolver == 3) {
-    linearSolver = g2o::make_unique<g2o::LinearSolverPCG<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverPCG<g2o::BlockSolver_6_3::PoseMatrixType>>();
   } else {
-    linearSolver = g2o::make_unique<g2o::LinearSolverPCGEigen<g2o::JacobiSolver_6_3::PoseMatrixType>>();
+    linearSolver = g2o::make_unique<g2o::LinearSolverPCGEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
   }
 
 
   g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
-    g2o::make_unique<g2o::JacobiSolver_6_3>(std::move(linearSolver))
+    g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
   );
   optimizer.setAlgorithm(solver);
   if(statsFilename.length() > 0)
     optimizer.setComputeBatchStatistics(true);
+
 
   vector<Vector3d> true_points;
   for (int i=0;i<numPoints; ++i)
@@ -336,7 +334,6 @@ int main(int argc, const char* argv[]){
     Vector3d diff = v_p->estimate()-true_points[it->second];
     if (inliers.find(it->first)==inliers.end())
       continue;
-
     sum_diff2 += diff.dot(diff);
     ++point_num;
   }

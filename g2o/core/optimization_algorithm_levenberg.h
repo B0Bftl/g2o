@@ -29,6 +29,7 @@
 
 #include "optimization_algorithm_with_hessian.h"
 #include "g2o_core_api.h"
+#include "Eigen/Sparse"
 
 #include <memory>
 
@@ -67,6 +68,8 @@ namespace g2o {
 
       //! return the number of levenberg iterations performed in the last round
       int levenbergIteration() { return _levenbergIterations;}
+
+      Solver* getLinSolver() {return m_solver.get();};
 
     protected:
       // Levenberg parameters

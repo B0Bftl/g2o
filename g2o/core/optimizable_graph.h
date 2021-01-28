@@ -104,6 +104,9 @@ namespace g2o {
       private:
         friend struct OptimizableGraph;
       public:
+    	int activeEdgeCount;
+        int acumulativeEdgeOffset;
+
         Vertex();
 
         //! returns a deep copy of the current vertex
@@ -400,6 +403,8 @@ namespace g2o {
          * The off diagoinal block is accesed via _hessian.
          */
         virtual void constructQuadraticForm() = 0;
+        virtual void constructQuadraticFormNoHessian() = 0;
+
 
         /**
          * maps the internal matrix to some external memory location,
@@ -416,6 +421,7 @@ namespace g2o {
          * the result in the given workspace
          */
         virtual void linearizeOplus(JacobianWorkspace& jacobianWorkspace) = 0;
+
 
         /** set the estimate of the to vertex, based on the estimate of the from vertices in the edge. */
         virtual void initialEstimate(const OptimizableGraph::VertexSet& from, OptimizableGraph::Vertex* to) = 0;

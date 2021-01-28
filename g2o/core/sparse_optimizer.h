@@ -164,7 +164,10 @@ namespace g2o {
 
     bool gaugeFreedom();
 
-    /**returns the cached chi2 of the active portion of the graph*/
+
+    size_t maxDegree = 0;
+
+	  /**returns the cached chi2 of the active portion of the graph*/
     number_t activeChi2() const;
     /**
      * returns the cached chi2 of the active portion of the graph.
@@ -283,7 +286,6 @@ namespace g2o {
     //! remove an action that should no longer be execured before computing the error vectors
     bool removeComputeErrorAction(HyperGraphAction* action);
 
-    
 
     protected:
     bool* _forceStopFlag;

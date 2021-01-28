@@ -42,7 +42,7 @@ namespace internal {
   {
     y.segment<MatrixType::RowsAtCompileTime>(yoff) = A * x.segment<MatrixType::ColsAtCompileTime>(xoff);
   }
-  
+
   template<>
   inline void pcg_axy(const MatrixX& A, const VectorX& x, int xoff, VectorX& y, int yoff)
   {

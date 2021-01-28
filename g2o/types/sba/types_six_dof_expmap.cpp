@@ -370,6 +370,10 @@ bool EdgeSE3ProjectXYZ::read(std::istream &is) {
       if (i != j)
         information()(j, i) = information()(i, j);
     }
+  is >> fx;
+  is >> fy;
+  is >> cx;
+  is >> cy;
   return true;
 }
 
@@ -383,6 +387,8 @@ bool EdgeSE3ProjectXYZ::write(std::ostream &os) const {
     for (int j = i; j < 2; j++) {
       os << " " << information()(i, j);
     }
+
+  os << " " << fx << " " << fy << " " << cx << " " << cy << " ";
   return os.good();
 }
 
@@ -422,6 +428,22 @@ void EdgeSE3ProjectXYZ::linearizeOplus() {
   _jacobianOplusXj(1, 3) = 0;
   _jacobianOplusXj(1, 4) = -1. / z * fy;
   _jacobianOplusXj(1, 5) = y / z_2 * fy;
+ /*
+  std::cout << "2x6" << std::endl;
+  for (int i = 0; i<2;i++){
+    for(int j = 0;j<6;j++) {
+     std::cout << i << "x" << j << " " << _jacobianOplusXj(i,j) << std::endl;
+    }
+  }
+  std::cout << "end" << std::endl;
+  std::cout << "2x3" << std::endl;
+  for (int i = 0; i<2;i++){
+    for(int j = 0;j<3;j++) {
+      std::cout << i << "x" << j << " " <<_jacobianOplusXi(i,j) << std::endl;
+    }
+  }
+  std::cout << "end" << std::endl;
+  */
 }
 
 Vector2 EdgeSE3ProjectXYZ::cam_project(const Vector3 &trans_xyz) const {

@@ -1,3 +1,6 @@
+//
+// created on basis of block_solver.h by Lukas Schneider, 18.03.2019.
+//
 // g2o - General Graph Optimization
 // Copyright (C) 2011 R. Kuemmerle, G. Grisetti, W. Burgard
 // All rights reserved.
@@ -24,11 +27,10 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef G2O_BLOCK_SOLVER_H
-#define G2O_BLOCK_SOLVER_H
+#ifndef G2O_JACOBI_SOLVER_H
+#define G2O_JACOBI_SOLVER_H
 
-#include <Eigen/Core>
-#include "Eigen/Sparse"
+#include <unsupported/Eigen/SparseExtra>
 #include "solver.h"
 #include "linear_solver.h"
 #include "sparse_block_matrix.h"
@@ -36,6 +38,8 @@
 #include "openmp_mutex.h"
 #include "g2o/config.h"
 #include "dynamic_aligned_buffer.hpp"
+#include "block_solver.h"
+#include "Eigen/Core"
 
 #include <memory>
 
@@ -45,7 +49,7 @@ namespace g2o {
    * \brief traits to summarize the properties of the fixed size optimization problem
    */
   template <int _PoseDim, int _LandmarkDim>
-  struct BlockSolverTraits
+  struct JacobiSolverTraits
   {
     static const int PoseDim = _PoseDim;
     static const int LandmarkDim = _LandmarkDim;
@@ -65,7 +69,7 @@ namespace g2o {
    * \brief traits to summarize the properties of the dynamic size optimization problem
    */
   template <>
-  struct BlockSolverTraits<Eigen::Dynamic, Eigen::Dynamic>
+  struct JacobiSolverTraits<Eigen::Dynamic, Eigen::Dynamic>
   {
     static const int PoseDim = Eigen::Dynamic;
     static const int LandmarkDim = Eigen::Dynamic;
@@ -82,25 +86,13 @@ namespace g2o {
   };
 
   /**
-   * \brief base for the block solvers with some basic function interfaces
-   */
-  class BlockSolverBase : public Solver
-  {
-    public:
-      virtual ~BlockSolverBase() {}
-      /**
-       * compute dest = H * src
-       */
-      virtual void multiplyHessian(number_t* dest, const number_t* src) const = 0;
-  };
-
-  /**
-   * \brief Implementation of a solver operating on the blocks of the Hessian
+   * \brief Implementation of a solver operating on the blocks of the Jacobi
    */
   template <typename Traits>
-  class BlockSolver: public BlockSolverBase
+  class JacobiSolver: public BlockSolverBase
   {
     public:
+	  typedef Eigen::Triplet<number_t> T;
       static const int PoseDim = Traits::PoseDim;
       static const int LandmarkDim = Traits::LandmarkDim;
       typedef typename Traits::PoseMatrixType PoseMatrixType;
@@ -121,8 +113,8 @@ namespace g2o {
        * NOTE: The BlockSolver assumes exclusive access to the linear solver and will therefore free the pointer
        * in its destructor.
        */
-      BlockSolver(std::unique_ptr<LinearSolverType> linearSolver);
-      ~BlockSolver();
+      JacobiSolver(std::unique_ptr<LinearSolverType> linearSolver);
+      ~JacobiSolver();
 
       virtual bool init(SparseOptimizer* optmizer, bool online = false);
       virtual bool buildStructure(bool zeroBlocks = false);
@@ -132,7 +124,7 @@ namespace g2o {
       virtual bool computeMarginals(SparseBlockMatrix<MatrixX>& spinv, const std::vector<std::pair<int, int> >& blockIndices);
       virtual bool setLambda(number_t lambda, bool backup = false);
       virtual void restoreDiagonal();
-      virtual bool supportsSchur() {return true;}
+      virtual bool supportsSchur() {return false;}
       virtual bool schur() { return _doSchur;}
       virtual void setSchur(bool s) { _doSchur = s;}
 
@@ -147,15 +139,19 @@ namespace g2o {
 
       virtual Eigen::SparseMatrix<number_t>& getJacobi() {return *_jacobiFull;};
 
-	  virtual void setEta(number_t eta) {_eta = eta;}
+      virtual void setEta(number_t eta) {_eta = eta;};
 
   protected:
       void resize(int* blockPoseIndices, int numPoseBlocks, 
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
-      number_t _eta;
-      void deallocate();
 
-      std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
+      void deallocate();
+      number_t _eta;
+      number_t _lambda;
+      //std::vector<number_t> _errVector;
+      std::vector<std::reference_wrapper<number_t>> _scaleCoeff;
+	  std::unique_ptr<Eigen::SparseMatrix<number_t>> _jacobiFull;
+
       std::unique_ptr<SparseBlockMatrix<PoseMatrixType>> _Hpp;
       std::unique_ptr<SparseBlockMatrix<LandmarkMatrixType>> _Hll;
       std::unique_ptr<SparseBlockMatrix<PoseLandmarkMatrixType>> _Hpl;
@@ -186,23 +182,14 @@ namespace g2o {
 
 
   template<int p, int l>
-  using BlockSolverPL = BlockSolver< BlockSolverTraits<p, l> >;
-
-  //variable size solver
-  using BlockSolverX = BlockSolverPL<Eigen::Dynamic, Eigen::Dynamic>;
+  using JacobiSolverPL = JacobiSolver< JacobiSolverTraits<p, l> >;
 
   // solver for BA/3D SLAM
-  using BlockSolver_6_3 = BlockSolverPL<6, 3>;
-
-  // solver fo BA with scale
-  using BlockSolver_7_3 = BlockSolverPL<7, 3>;
-
-  // 2Dof landmarks 3Dof poses
-  using BlockSolver_3_2 = BlockSolverPL<3, 2>;
+  using JacobiSolver_6_3 = JacobiSolverPL<6, 3>;
 
 } // end namespace
 
-#include "block_solver.hpp"
+#include "jacobi_solver.hpp"
 
 
 #endif

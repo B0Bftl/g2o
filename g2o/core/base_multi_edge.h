@@ -85,6 +85,8 @@ namespace g2o {
       virtual bool allVerticesFixed() const;
 
       virtual void constructQuadraticForm() ;
+      virtual void constructQuadraticFormNoHessian() {};
+
 
       virtual void mapHessianMemory(number_t* d, int i, int j, bool rowMajor);
 
@@ -148,8 +150,10 @@ namespace g2o {
       virtual bool allVerticesFixed() const;
 
       virtual void constructQuadraticForm() ;
+	  virtual void constructQuadraticFormNoHessian() {};
 
-      virtual void mapHessianMemory(number_t* d, int i, int j, bool rowMajor);
+
+	  virtual void mapHessianMemory(number_t* d, int i, int j, bool rowMajor);
 
       using BaseEdge<-1,E>::computeError;
 

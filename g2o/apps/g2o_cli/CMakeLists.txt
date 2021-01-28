@@ -12,7 +12,7 @@ endif()
 
 set_property(TARGET g2o_cli_library APPEND PROPERTY COMPILE_DEFINITIONS G2O_DEFAULT_TYPES_DIR_="${CMAKE_LIBRARY_OUTPUT_DIRECTORY}" G2O_DEFAULT_SOLVERS_DIR_="${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 
-target_link_libraries(g2o_cli_library core)
+target_link_libraries(g2o_cli_library core solver_eigen)
 if(UNIX)
   target_link_libraries(g2o_cli_library ${CMAKE_DL_LIBS})
 endif(UNIX)

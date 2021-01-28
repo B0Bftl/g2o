@@ -61,6 +61,7 @@ namespace g2o {
     int    iterationsLinearSolver;    ///< iterations of PCG, (0 if not used, i.e., Cholesky)
     number_t timeUpdate;                ///< time to apply the update
     number_t timeIteration;             ///< total time;
+    number_t timeQrDecomposition;        ///< computing time of QR for pcg
 
     number_t timeMarginals;             ///< computing the inverse elements (solve blocks) and thus the marginal covariances
 

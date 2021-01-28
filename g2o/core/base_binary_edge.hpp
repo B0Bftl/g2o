@@ -86,12 +86,14 @@ void BaseBinaryEdge<D, E, VertexXiType, VertexXjType>::constructQuadraticForm()
           from->A().noalias() += AtO*A;
         }
 
+
         if (toNotFixed ) {
           if (_hessianRowMajor) // we have to write to the block as transposed
             _hessianTransposed.noalias() += B.transpose() * AtO.transpose();
           else
             _hessian.noalias() += AtO * B;
         }
+
       }
       if (toNotFixed) {
         internal::QuadraticFormLock lck(*to);
@@ -122,12 +124,64 @@ void BaseBinaryEdge<D, E, VertexXiType, VertexXjType>::constructQuadraticForm()
           else
             _hessian.noalias() += A.transpose() * weightedOmega * B;
         }
+
       }
       if (toNotFixed) {
         internal::QuadraticFormLock lck(*to);
 
         to->b().noalias() += B.transpose() * omega_r;
         to->A().noalias() += B.transpose() * weightedOmega * B;
+      }
+    }
+  }
+}
+
+template <int D, typename E, typename VertexXiType, typename VertexXjType>
+void BaseBinaryEdge<D, E, VertexXiType, VertexXjType>::constructQuadraticFormNoHessian()
+{
+  VertexXiType* from = static_cast<VertexXiType*>(_vertices[0]);
+  VertexXjType* to   = static_cast<VertexXjType*>(_vertices[1]);
+
+  // get the Jacobian of the nodes in the manifold domain
+  const JacobianXiOplusType& A = jacobianOplusXi();
+  const JacobianXjOplusType& B = jacobianOplusXj();
+
+  bool fromNotFixed = !(from->fixed());
+  bool toNotFixed = !(to->fixed());
+
+  if (fromNotFixed || toNotFixed) {
+    const InformationType& omega = _information;
+    Eigen::Matrix<number_t, D, 1, Eigen::ColMajor> omega_r = - omega * _error;
+    if (this->robustKernel() == 0) {
+      if (fromNotFixed) {
+          internal::QuadraticFormLock lck(*from);
+          from->b().noalias() += A.transpose() * omega_r;
+      }
+      if (toNotFixed) {
+        internal::QuadraticFormLock lck(*to);
+        to->b().noalias() += B.transpose() * omega_r;
+      }
+    } else { // robust (weighted) error according to some kernel
+      number_t error = this->chi2();
+      Vector3 rho;
+      this->robustKernel()->robustify(error, rho);
+      InformationType weightedOmega = this->robustInformation(rho);
+      //std::cout << PVAR(rho.transpose()) << std::endl;
+      //std::cout << PVAR(weightedOmega) << std::endl;
+
+      omega_r *= rho[1];
+      if (fromNotFixed) {
+        {
+          internal::QuadraticFormLock lck(*from);
+
+          from->b().noalias() += A.transpose() * omega_r;
+        }
+
+      }
+      if (toNotFixed) {
+        internal::QuadraticFormLock lck(*to);
+
+        to->b().noalias() += B.transpose() * omega_r;
       }
     }
   }

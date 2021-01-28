@@ -28,6 +28,8 @@
 #define G2O_LINEAR_SOLVER_H
 #include "sparse_block_matrix.h"
 #include "sparse_block_matrix_ccs.h"
+#include "sparse_optimizer.h"
+#include "Eigen/Sparse"
 
 namespace g2o {
 
@@ -58,6 +60,26 @@ class LinearSolver
     virtual bool solve(const SparseBlockMatrix<MatrixType>& A, number_t* x, number_t* b) = 0;
 
     /**
+     * solve caller with Eigen Matrix definition and Jacobi Matix. Returns false if not defined
+     */
+    virtual bool solve(Eigen::SparseMatrix<number_t>& J, number_t* x, number_t* b, int _numCams, int _numPoints,
+                       int _rowDim, int _colDimCam, int _colDimPoint, number_t _lambda, number_t _eta = 0.1) {
+        (void) J;
+        (void) x;
+        (void) b;
+        (void) _numCams;
+        (void) _numPoints;
+        (void) _rowDim;
+        (void) _colDimCam;
+        (void) _colDimPoint;
+        (void) _lambda;
+        (void) _eta;
+        std::cout << "Eigen SparseMatrixSolver not defined" << std::endl;
+        return false;
+    }
+
+
+    /**
      * Inverts the diagonal blocks of A
      * @returns false if not defined.
      */
@@ -78,6 +100,8 @@ class LinearSolver
     //! write a debug dump of the system matrix if it is not PSD in solve
     virtual bool writeDebug() const { return false;}
     virtual void setWriteDebug(bool) {}
+
+    number_t eta;
 };
 
 /**

@@ -91,6 +91,8 @@ namespace g2o {
       const JacobianXjOplusType& jacobianOplusXj() const { return _jacobianOplusXj;}
 
       inline virtual void constructQuadraticForm() ;
+      inline virtual void constructQuadraticFormNoHessian() ;
+
 
       inline virtual void mapHessianMemory(number_t* d, int i, int j, bool rowMajor);
 

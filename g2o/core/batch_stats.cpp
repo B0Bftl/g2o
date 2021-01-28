@@ -55,18 +55,19 @@ namespace g2o {
     
     /** timings **/
     // nonlinear part
+    os << PTHING(  timeLinearSolution );             // total time for solving Ax=b
+    os << PTHING(  iterationsLinearSolver );  // iterations of PCG
+    os << PTHING(  timeQrDecomposition ); // QR Decomp of PCG
     os << PTHING(  timeResiduals );  
     os << PTHING(  timeLinearize );   // jacobians
     os << PTHING(  timeQuadraticForm ); // construct the quadratic form in the graph
-    
     // block_solver (constructs Ax=b, plus maybe schur);
     os << PTHING(  timeSchurComplement ); // compute schur complement (0 if not done);
     
     // linear solver (computes Ax=b); );
     os << PTHING(  timeSymbolicDecomposition ); // symbolic decomposition (0 if not done);
     os << PTHING(  timeNumericDecomposition ); // numeric decomposition  (0 if not done);
-    os << PTHING(  timeLinearSolution );             // total time for solving Ax=b
-    os << PTHING(  iterationsLinearSolver );  // iterations of PCG
+
     os << PTHING(  timeUpdate ); // oplus
     os << PTHING(  timeIteration ); // total time );
 

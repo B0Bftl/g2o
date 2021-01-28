@@ -162,6 +162,15 @@ namespace g2o {
         maxDiagonal = std::max(fabs(v->hessian(j,j)),maxDiagonal);
       }
     }
+    if(maxDiagonal == 0) {
+      Eigen::SparseMatrix<number_t >& jacobi = _solver.getJacobi();
+      Eigen::SparseMatrix<number_t> hessian =  (jacobi.transpose() * jacobi);
+      for (int k = 0; k < hessian.cols(); ++k) {
+      	maxDiagonal = std::max(maxDiagonal, fabs(hessian.coeff(k,k)));
+      }
+      maxDiagonal = maxDiagonal;
+    }
+
     return _tau*maxDiagonal;
   }
 
